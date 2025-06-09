@@ -1,20 +1,27 @@
 -- Drop types (if needed)
 DROP TYPE IF EXISTS user_role,
-user_status CASCADE;
+user_status,
+upload_type,
+upload_status CASCADE;
 
 -- Create enums
 CREATE TYPE user_role AS ENUM ('user', 'admin', 'superAdmin');
 
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'banned');
 
--- Drop tables
-DROP TABLE IF EXISTS users_permissions,
-permissions,
-users CASCADE;
+CREATE TYPE upload_type AS ENUM ('form', 'file', 'api');
 
--- Create users table
+CREATE TYPE upload_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+
+-- Drop tables
+DROP TABLE IF EXISTS upload,
+user_permission,
+permission,
+"user" CASCADE;
+
+-- Create user table
 CREATE TABLE
-	users (
+	"user" (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
 		username VARCHAR(32) NOT NULL UNIQUE,
 		password VARCHAR(64) NOT NULL,
@@ -25,18 +32,32 @@ CREATE TABLE
 		created_by UUID
 	);
 
--- Create permissions table
+-- Create permission table
 CREATE TABLE
-	permissions (
+	permission (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
 		name TEXT NOT NULL UNIQUE,
 		description TEXT
 	);
 
--- Create user_permissions junction table
+-- Create user_permission junction table
 CREATE TABLE
-	users_permissions (
-		user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-		permission_id UUID NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+	user_permission (
+		user_id UUID NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+		permission_id UUID NOT NULL REFERENCES permission (id) ON DELETE CASCADE,
 		PRIMARY KEY (user_id, permission_id)
+	);
+
+-- Create upload table
+CREATE TABLE
+	upload (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
+		user_id UUID NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+		display_name TEXT NOT NULL UNIQUE,
+		date TIMESTAMP DEFAULT now () NOT NULL,
+		type upload_type NOT NULL,
+		status upload_status DEFAULT 'pending' NOT NULL,
+		file_name TEXT NOT NULL,
+		path TEXT NOT NULL UNIQUE,
+		hash VARCHAR(64) NOT NULL UNIQUE
 	);
