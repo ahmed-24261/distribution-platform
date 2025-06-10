@@ -121,10 +121,12 @@ async function seed() {
       { userId: admin2, permissionId: canGetOwnUploads },
       { userId: admin2, permissionId: canUpdateAllUpload },
       { userId: admin2, permissionId: canUpdateOwnUpload },
+      { userId: admin2, permissionId: canDeleteOwnUploads },
 
       { userId: admin3, permissionId: canCreateUpload },
       { userId: admin3, permissionId: canGetAllUploads },
       { userId: admin3, permissionId: canGetOwnUploads },
+      { userId: admin3, permissionId: canDeleteAllUploads },
 
       { userId: admin4, permissionId: canCreateUpload },
     ];

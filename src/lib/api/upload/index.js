@@ -1,16 +1,10 @@
 import * as pathLib from "path";
-import fs from "fs/promises";
 import { DateTime } from "luxon";
-import { calculateFileHash } from "@/lib/api";
-import {
-  createUpload as createUploadRecord,
-  getUploadsWhereDisplayNameLike as getRank,
-} from "@/lib/upload";
-
-const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
+import { calculateFileHash } from "@/lib/utils";
+import { getUploadsWhereDisplayNameLike } from "@/lib/upload";
 
 // --- Post request
-export const validateData = async (formData) => {
+export const validatePostData = async (formData) => {
   try {
     const acceptableFileTypes = ["application/zip"];
 
@@ -65,31 +59,20 @@ export const validateData = async (formData) => {
   }
 };
 
-export const createUpload = async (formData, userId) => {
-  const { data, fileData } = await constructData(formData, userId);
-
-  const uploadId = await createUploadRecord(data);
-
-  const absPath = pathLib.join(FILE_STORAGE_PATH, data.path);
-  const absDirPath = pathLib.dirname(absPath);
-  await fs.mkdir(dirPath, { recursive: true });
-  await fs.writeFile(absDirPath, fileData);
-
-  return uploadId;
-};
-
-const constructData = async (formData, userId) => {
+export const constructPostData = async (formData, userId) => {
   const type = formData.get("type");
 
   const data = { userId, type };
   let fileData;
 
-  const date = new Date();
+  const date = new Date("2022-12-14");
   const formatDate = DateTime.fromJSDate(date).setLocale("fr");
   const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
   const formatDateForPath = formatDate.toFormat("yyyyMMdd");
 
-  const rank = await getRank(formatDateForName).then((u) => u.length + 1);
+  const todaysUploads = await getUploadsWhereDisplayNameLike(formatDateForName);
+  const rank = todaysUploads.length + 1;
+
   const dirPath = pathLib.join("data", "uploads", formatDateForPath);
 
   const displayName = `${formatDateForName}-${type}-${rank}`;

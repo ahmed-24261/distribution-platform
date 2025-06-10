@@ -12,7 +12,7 @@ export const getUserById = async (id) => {
 
     return user;
   } catch (error) {
-    throw error;
+    throw new Error("Failed to fetch user by id");
   }
 };
 
@@ -35,6 +35,24 @@ export const getUserByIdWithPermissions = async (id) => {
 
     return user;
   } catch (error) {
-    throw error;
+    throw new Error("Failed to fetch user by id with permissions");
+  }
+};
+
+export const getUserByUsername = async (username) => {
+  try {
+    const query = `
+      SELECT id, username, role, status, created_at, updated_at, created_by 
+      FROM "user" 
+      WHERE username = $1`;
+    const values = [username];
+
+    const { rows } = await pool.query(query, values);
+
+    const user = rows.length === 0 ? null : rows[0];
+
+    return user;
+  } catch (error) {
+    throw new Error("Failed to fetch user by username");
   }
 };
