@@ -1,6 +1,7 @@
 import pool from "@/lib/db";
 import * as pathLib from "path";
 import fs from "fs/promises";
+import { HTTPError } from "@/lib/utils";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
@@ -105,7 +106,7 @@ export const getUploadByHash = async (hash) => {
   }
 };
 
-export const createUploadTransaction = async (data, fileData) => {
+export const createUploadTransaction = async (recordData, fileData) => {
   const client = await pool.connect();
 
   try {
@@ -116,12 +117,13 @@ export const createUploadTransaction = async (data, fileData) => {
     values
     ($1, $2, $3, $4, $5, $6, $7)
     RETURNING id`;
-    const { userId, displayName, date, type, fileName, path, hash } = data;
+    const { userId, displayName, date, type, fileName, path, hash } =
+      recordData;
     const values = [userId, displayName, date, type, fileName, path, hash];
 
     const { rows } = await client.query(query, values);
 
-    await saveFile(data, fileData);
+    await saveFile(recordData, fileData);
 
     await client.query("COMMIT");
     client.release();
@@ -134,8 +136,8 @@ export const createUploadTransaction = async (data, fileData) => {
   }
 };
 
-const saveFile = async (data, fileData) => {
-  const path = data.path;
+const saveFile = async (recordData, fileData) => {
+  const path = recordData.path;
   const absPath = pathLib.join(FILE_STORAGE_PATH, path);
   const absDirPath = pathLib.dirname(absPath);
   await fs.mkdir(absDirPath, { recursive: true });
@@ -157,6 +159,8 @@ export const deleteUploadTransaction = async (id) => {
 
     const { rows } = await client.query(query, values);
 
+    if (rows.length === 0) throw new HTTPError("Record not found", 404);
+
     await unlinkFile(rows[0].path);
 
     await client.query("COMMIT");
@@ -166,12 +170,16 @@ export const deleteUploadTransaction = async (id) => {
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();
+    throw error;
   }
 };
 
 const unlinkFile = async (path) => {
   const absPath = pathLib.join(FILE_STORAGE_PATH, path);
   const absDirPath = pathLib.dirname(absPath);
+  await fs.access(absPath).catch(() => {
+    throw new HTTPError("File not found", 404);
+  });
   await fs.unlink(absPath);
   await fs.rmdir(absDirPath).catch(() => {});
 };

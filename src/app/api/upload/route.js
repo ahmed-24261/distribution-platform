@@ -10,6 +10,8 @@ import {
   deleteUploadTransaction,
 } from "@/lib/upload";
 import { validatePostData, constructPostData } from "@/lib/api/upload";
+import { HTTPError } from "@/lib/utils";
+import { redis } from "@/lib/redis";
 
 export const GET = async (request) => {
   try {
@@ -21,26 +23,24 @@ export const GET = async (request) => {
     const { searchParams } = new URL(request.url);
     const ids = searchParams.getAll("id");
 
-    let uploads;
+    let records;
     if (hasAllAccess) {
-      uploads = ids.length ? await getUploadsById(ids) : await getAllUploads();
+      records = ids.length ? await getUploadsById(ids) : await getAllUploads();
     } else if (hasOwnAccess) {
-      uploads = ids.length
+      records = ids.length
         ? await getUploadsByIdAndUserId(ids, userId)
         : await getUploadsByUserId(userId);
     } else {
-      return NextResponse.json(
-        { data: null, error: { message: "Unauthorized: no upload access" } },
-        { status: 403 }
-      );
+      throw new HTTPError("Unauthorized: no upload access", 403);
     }
 
-    return NextResponse.json({ data: uploads, error: null });
+    return NextResponse.json({ data: records, error: null }, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
-    );
+    const isHTTPError = error instanceof HTTPError;
+    const message = isHTTPError ? error.getMessage() : "Internal server error";
+    const status = isHTTPError ? error.getStatus() : 500;
+
+    return NextResponse.json({ data: null, error: { message } }, { status });
   }
 };
 
@@ -54,40 +54,31 @@ export const POST = async (request) => {
 
     if (hasAccess) {
       const { valid, message } = await validatePostData(formData);
-      if (!valid) {
-        return NextResponse.json(
-          { data: null, error: { message } },
-          { status: 400 }
-        );
-      }
+      if (!valid) throw new HTTPError(message, 400);
 
-      const { data, fileData } = await constructPostData(formData, userId);
+      const { recordData, fileData } = await constructPostData(
+        formData,
+        userId
+      );
 
-      const exist = await getUploadByHash(data.hash);
-      if (exist) {
-        return NextResponse.json(
-          { data: null, error: { message: "Upload already exists" } },
-          { status: 409 }
-        );
-      }
+      const exist = await getUploadByHash(recordData.hash);
+      if (exist) throw new HTTPError("Record already exists", 40);
 
-      const uploadId = await createUploadTransaction(data, fileData);
+      const uploadId = await createUploadTransaction(recordData, fileData);
 
       return NextResponse.json(
         { data: uploadId, error: null },
         { status: 201 }
       );
     } else {
-      return NextResponse.json(
-        { data: null, error: { message: "Unauthorized: no upload access" } },
-        { status: 403 }
-      );
+      throw new HTTPError("Unauthorized: no upload access", 403);
     }
   } catch (error) {
-    return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
-    );
+    const isHTTPError = error instanceof HTTPError;
+    const message = isHTTPError ? error.getMessage() : "Internal server error";
+    const status = isHTTPError ? error.getStatus() : 500;
+
+    return NextResponse.json({ data: null, error: { message } }, { status });
   }
 };
 
@@ -98,7 +89,15 @@ export const PUT = async (request) => {
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_UPLOADS");
 
+    console.log("permissions:\n" + permissions.join("\n"), "blue");
+
     const jsonData = await request.json();
+    const { id } = jsonData;
+    console.log("ID: " + id, "blue");
+
+    await redis.rPush("processQueue", id);
+
+    console.log("Done redis", "blue");
 
     // validate data
     // validatePutData(jsonData);
@@ -135,40 +134,59 @@ export const DELETE = async (request) => {
     const ids = searchParams.getAll("id");
 
     if (!ids.length) {
-      return NextResponse.json(
-        { data: null, error: { message: "No IDs provided for deletion" } },
-        { status: 400 }
-      );
+      throw new HTTPError("Bad request: id required", 400);
+    }
+    if (!hasAllAccess && !hasOwnAccess) {
+      throw new HTTPError("Unauthorized: no DELETE access", 403);
     }
 
-    const deletedIds = [];
+    const data = [];
+    const error = [];
     if (hasAllAccess) {
       for (const id of ids) {
-        const deletedUploadId = await deleteUploadTransaction(id);
-        if (deletedUploadId) deletedIds.push(deletedUploadId);
+        await deleteUploadTransaction(id)
+          .then((id) => {
+            data.push(id);
+          })
+          .catch((error) => {
+            const message =
+              error instanceof HTTPError
+                ? error.getMessage()
+                : "Internal server error";
+            error.push({ id, message });
+          });
       }
     } else if (hasOwnAccess) {
-      const ownUploads = await getUploadsByIdAndUserId(ids, userId);
-      const ownUploadIds = ownUploads.map((upload) => upload.id);
-      for (const id of ownUploadIds) {
-        const deletedUploadId = await deleteUploadTransaction(id);
-        if (deletedUploadId) deletedIds.push(deletedUploadId);
+      const ownRecordes = await getUploadsByIdAndUserId(ids, userId);
+      const ownRecordIds = ownRecordes.map((upload) => upload.id);
+      for (const id of ids) {
+        if (!ownRecordIds.includes(id)) {
+          error.push({ id, message: "No access to record" });
+          continue;
+        }
+        await deleteUploadTransaction(id)
+          .then((id) => {
+            data.push(id);
+          })
+          .catch((error) => {
+            const message =
+              error instanceof HTTPError
+                ? error.getMessage()
+                : "Internal server error";
+            error.push({ id, message });
+          });
       }
-    } else {
-      return NextResponse.json(
-        { data: null, error: { message: "Unauthorized: no delete access" } },
-        { status: 403 }
-      );
     }
 
-    return NextResponse.json({
-      data: deletedIds,
-      error: null,
-    });
-  } catch (error) {
     return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
+      { data, error: error.length ? error : null },
+      { status: 200 }
     );
+  } catch (error) {
+    const isHTTPError = error instanceof HTTPError;
+    const message = isHTTPError ? error.getMessage() : "Internal server error";
+    const status = isHTTPError ? error.getStatus() : 500;
+
+    return NextResponse.json({ data: null, error: { message } }, { status });
   }
 };

@@ -62,7 +62,7 @@ export const validatePostData = async (formData) => {
 export const constructPostData = async (formData, userId) => {
   const type = formData.get("type");
 
-  const data = { userId, type };
+  const recordData = { userId, type };
   let fileData;
 
   const date = new Date("2022-12-14");
@@ -77,8 +77,8 @@ export const constructPostData = async (formData, userId) => {
 
   const displayName = `${formatDateForName}-${type}-${rank}`;
 
-  data.date = date.toISOString();
-  data.displayName = displayName;
+  recordData.date = date.toISOString();
+  recordData.displayName = displayName;
 
   if (type === "file" || type === "api") {
     const file = formData.get("file");
@@ -86,11 +86,11 @@ export const constructPostData = async (formData, userId) => {
     const fileName = file.name;
     const path = pathLib.join(dirPath, `${rank} - ${type} - ${fileName}`);
 
-    data.fileName = fileName;
-    data.path = path;
+    recordData.fileName = fileName;
+    recordData.path = path;
 
     fileData = Buffer.from(await file.arrayBuffer());
-    data.hash = calculateFileHash(fileData);
+    recordData.hash = calculateFileHash(fileData);
   } else {
     const source = formData.get("source");
     const object = formData.get("object");
@@ -108,5 +108,5 @@ export const constructPostData = async (formData, userId) => {
     const path = pathLib.join(dirPath, `${rank} - ${type} - ${fileName}`);
   }
 
-  return { data, fileData };
+  return { recordData, fileData };
 };
