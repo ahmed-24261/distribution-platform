@@ -1,8 +1,9 @@
-const { Pool } = require("pg");
-const path = require("path");
-const { consoleLog } = require("../consoleLog");
-const crypto = require("crypto");
-require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+import { Pool } from "pg";
+import crypto from "crypto";
+import dotenv from "dotenv";
+import { consoleLog } from "../consoleLog/index.js";
+
+dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -25,8 +26,8 @@ async function seed() {
       { name: "CAN_CREATE_UPLOAD", description: "can create upload" },
       { name: "CAN_GET_ALL_UPLOADS", description: "can get all uploads" },
       { name: "CAN_GET_OWN_UPLOADS", description: "can get own uploads" },
-      { name: "CAN_UPDATE_ALL_UPLOAD", description: "can update upload" },
-      { name: "CAN_UPDATE_OWN_UPLOAD", description: "can update own upload" },
+      { name: "CAN_UPDATE_ALL_UPLOADS", description: "can update upload" },
+      { name: "CAN_UPDATE_OWN_UPLOADS", description: "can update own upload" },
       { name: "CAN_DELETE_ALL_UPLOADS", description: "can delete all uploads" },
       { name: "CAN_DELETE_OWN_UPLOADS", description: "can delete own uploads" },
     ];

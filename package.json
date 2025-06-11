@@ -9,12 +9,14 @@
     "start": "next start",
     "lint": "next lint",
     "sql": "node sql/run-sql.js",
-    "seed": "node sql/seed.js"
+    "seed": "node sql/seed.js",
+    "process-worker": "node workers/processUpload.js"
   },
   "dependencies": {
     "crypto": "^1.0.1",
     "luxon": "^3.6.1",
     "next": "15.3.3",
+    "node-stream-zip": "^1.15.0",
     "pg": "^8.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

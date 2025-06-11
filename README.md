@@ -15,10 +15,12 @@ PGADMIN_PASSWORD=1I9ynVzWdHm0AJRwDsxtGlEEJKmXq4
 
 DATABASE_URL="postgresql://admin:rTCMlcXQuRCD3y41maDWQVm4PjHjvn@localhost:5432/pd_database?schema=public"
 
+# Redis URL
+
+REDUS_URL="redis://localhost:6379"
+
 #
 
-FILE_STORAGE_PATH=C:/Users/User/Desktop/fileSystem/
+FILE_STORAGE_PATH=C:/Users/Admin/Desktop/fileSystem/
 
-# share:
-
-https://limewire.com/d/O5RMm#NyzvcRcEnT
+TEMP_FOLDER=C:/Users/Admin/Desktop/temp

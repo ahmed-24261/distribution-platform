@@ -8,10 +8,13 @@ import {
   getUploadByHash,
   createUploadTransaction,
   deleteUploadTransaction,
+  updateUploadStatusById,
+  getUploadByIdWithUser,
 } from "@/lib/upload";
 import { validatePostData, constructPostData } from "@/lib/api/upload";
 import { HTTPError } from "@/lib/utils";
 import { redis } from "@/lib/redis";
+import { consoleLog } from "../../../../consoleLog";
 
 export const GET = async (request) => {
   try {
@@ -89,37 +92,41 @@ export const PUT = async (request) => {
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_UPLOADS");
 
-    console.log("permissions:\n" + permissions.join("\n"), "blue");
+    consoleLog("permissions:\n" + permissions.join("\n"), "yellow");
 
     const jsonData = await request.json();
     const { id } = jsonData;
-    console.log("ID: " + id, "blue");
 
-    await redis.rPush("processQueue", id);
-
-    console.log("Done redis", "blue");
-
-    // validate data
-    // validatePutData(jsonData);
-
-    if (hasAllAccess) {
-    } else if (hasOwnAccess) {
-    } else {
-      return NextResponse.json(
-        { data: null, error: { message: "Unauthorized: no update access" } },
-        { status: 403 }
-      );
+    if (!hasAllAccess && !hasOwnAccess) {
+      throw new HTTPError("Unauthorized: no UPDATE access", 403);
     }
 
-    return NextResponse.json({
-      data: "PUT request",
-      error: null,
-    });
+    if (!id) {
+      throw new HTTPError("Bad request: id required", 400);
+    }
+
+    const upload = await getUploadByIdWithUser(id);
+    if (!upload) {
+      throw new HTTPError("Bad request: invalid id", 400);
+    }
+    if (upload.status !== "pending") {
+      // throw new HTTPError("Upload already processed", 400);
+    }
+
+    if (!hasAllAccess && userId !== upload.user_id) {
+      throw new HTTPError("Unauthorized: insufficient permissions", 403);
+    }
+
+    await updateUploadStatusById(id, "processing");
+    await redis.rPush("uploadsToProcess", id);
+
+    return NextResponse.json({ data: id, error: null }, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
-    );
+    const isHTTPError = error instanceof HTTPError;
+    const message = isHTTPError ? error.getMessage() : "Internal server error";
+    const status = isHTTPError ? error.getStatus() : 500;
+
+    return NextResponse.json({ data: null, error: { message } }, { status });
   }
 };
 

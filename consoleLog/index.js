@@ -28,6 +28,6 @@ const colors = {
   bgWhite: "\x1b[47m",
 };
 
-exports.consoleLog = (string, attribute) => {
+export const consoleLog = (string, attribute) => {
   console.log(`${colors[attribute]}${string}${colors.reset}`);
 };

@@ -1,8 +1,10 @@
-const fs = require("fs");
-const path = require("path");
-const { Pool } = require("pg");
-const { consoleLog } = require("../consoleLog");
-require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+import fs from "fs";
+import path from "path";
+import { Pool } from "pg";
+import dotenv from "dotenv";
+import { consoleLog } from "../consoleLog/index.js";
+
+dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -21,4 +23,4 @@ async function runSQLFile(filePath) {
   }
 }
 
-runSQLFile(path.join(__dirname, "schema.sql"));
+runSQLFile("sql/schema.sql");

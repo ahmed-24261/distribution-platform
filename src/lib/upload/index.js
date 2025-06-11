@@ -5,6 +5,22 @@ import { HTTPError } from "@/lib/utils";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
+export const getUploadByIdWithUser = async (id) => {
+  try {
+    const query = `
+    SELECT id, display_name, date, type, status, file_name, path, hash, user_id
+    FROM upload
+    WHERE id = $1
+  `;
+    const values = [id];
+
+    const { rows } = await pool.query(query, values);
+    return rows[0] ? rows[0] : null;
+  } catch (error) {
+    throw new Error("Failed to fetch upload by id");
+  }
+};
+
 export const getUploadsById = async (ids) => {
   try {
     const query = `
@@ -18,7 +34,7 @@ export const getUploadsById = async (ids) => {
     const { rows } = await pool.query(query, values);
     return rows;
   } catch (error) {
-    throw new Error("Failed to fetch uploads By id");
+    throw new Error("Failed to fetch uploads by id");
   }
 };
 
@@ -35,7 +51,7 @@ export const getUploadsByIdAndUserId = async (ids, userId) => {
     const { rows } = await pool.query(query, values);
     return rows;
   } catch (error) {
-    throw new Error("Failed to fetch uploads By id and userId");
+    throw new Error("Failed to fetch uploads by id and userId");
   }
 };
 
@@ -67,11 +83,11 @@ export const getUploadsByUserId = async (userId) => {
     const { rows } = await pool.query(query, values);
     return rows;
   } catch (error) {
-    throw new Error("Failed to fetch uploads By userId");
+    throw new Error("Failed to fetch uploads by userId");
   }
 };
 
-export const getUploadsWhereDisplayNameLike = async (displayName) => {
+export const countUploadsWhereDisplayNameLike = async (displayName) => {
   try {
     const query = `
     SELECT id, display_name, date, type, status, file_name, path, hash
@@ -80,10 +96,10 @@ export const getUploadsWhereDisplayNameLike = async (displayName) => {
   `;
     const values = [`${displayName}%`];
 
-    const { rows } = await pool.query(query, values);
-    return rows;
+    const { rowCount } = await pool.query(query, values);
+    return rowCount;
   } catch (error) {
-    throw new Error("Failed to fetch uploads by displayName like");
+    throw new Error("Failed to count uploads by displayName like");
   }
 };
 
@@ -98,9 +114,7 @@ export const getUploadByHash = async (hash) => {
 
     const { rows } = await pool.query(query, values);
 
-    const upload = rows.length === 0 ? null : rows[0];
-
-    return upload;
+    return rows[0] ? rows[0] : null;
   } catch (error) {
     throw new Error("Failed to fetch upload by hash");
   }
@@ -112,11 +126,12 @@ export const createUploadTransaction = async (recordData, fileData) => {
   try {
     await client.query("BEGIN");
 
-    const query = `INSERT INTO upload
-    (user_id, display_name, date, type, file_name, path, hash)
-    values
-    ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id`;
+    const query = `
+      INSERT INTO upload
+      (user_id, display_name, date, type, file_name, path, hash)
+      values
+      ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id`;
     const { userId, displayName, date, type, fileName, path, hash } =
       recordData;
     const values = [userId, displayName, date, type, fileName, path, hash];
@@ -128,7 +143,7 @@ export const createUploadTransaction = async (recordData, fileData) => {
     await client.query("COMMIT");
     client.release();
 
-    return rows[0].id;
+    return rows[0] ? rows[0].id : null;
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();
@@ -166,7 +181,7 @@ export const deleteUploadTransaction = async (id) => {
     await client.query("COMMIT");
     client.release();
 
-    return rows[0].id;
+    return rows[0] ? rows[0].id : null;
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();
@@ -182,4 +197,22 @@ const unlinkFile = async (path) => {
   });
   await fs.unlink(absPath);
   await fs.rmdir(absDirPath).catch(() => {});
+};
+
+export const updateUploadStatusById = async (id, status) => {
+  try {
+    const query = `
+      UPDATE upload
+      SET status = $1
+      WHERE id = $2
+      RETURNING id, display_name, date, type, status, file_name, path, hash; 
+    `;
+    const values = [status, id];
+
+    const { rows } = await pool.query(query, values);
+
+    return rows[0] ? rows[0] : null;
+  } catch (error) {
+    throw new Error("Failed update upload status by id");
+  }
 };

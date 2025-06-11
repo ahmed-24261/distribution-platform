@@ -1,7 +1,7 @@
 import * as pathLib from "path";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
-import { getUploadsWhereDisplayNameLike } from "@/lib/upload";
+import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
 
 // --- Post request
 export const validatePostData = async (formData) => {
@@ -70,8 +70,7 @@ export const constructPostData = async (formData, userId) => {
   const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
   const formatDateForPath = formatDate.toFormat("yyyyMMdd");
 
-  const todaysUploads = await getUploadsWhereDisplayNameLike(formatDateForName);
-  const rank = todaysUploads.length + 1;
+  const rank = (await countUploadsWhereDisplayNameLike(formatDateForName)) + 1;
 
   const dirPath = pathLib.join("data", "uploads", formatDateForPath);
 
