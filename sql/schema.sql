@@ -17,7 +17,7 @@ CREATE TYPE upload_status AS ENUM ('pending', 'processing', 'completed', 'failed
 
 CREATE TYPE fiche_status AS ENUM ('valid', 'suspended', 'canceled');
 
-CREATE TYPE document_type AS ENUM ('File', 'Message', 'Attachment');
+CREATE TYPE document_type AS ENUM ('File', 'Message');
 
 -- Drop tables
 DROP TABLE IF EXISTS document,
@@ -71,7 +71,7 @@ CREATE TABLE
 		hash VARCHAR(64) NOT NULL UNIQUE
 	);
 
--- CreateTable
+-- Create source table
 CREATE TABLE
 	source (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE
 		description TEXT
 	);
 
--- CreateTable
+-- Create fiche table
 CREATE TABLE
 	fiche (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
@@ -97,16 +97,18 @@ CREATE TABLE
 		dump TEXT
 	);
 
+-- Create document table
 CREATE TABLE
 	document (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
 		type document_type NOT NULL,
-		fiche_id UUID NOT NULL REFERENCES fiche (id) ON DELETE CASCADE,
+		fiche_id UUID REFERENCES fiche (id) ON DELETE CASCADE,
 		file_name TEXT NOT NULL,
 		path TEXT NOT NULL UNIQUE,
 		hash VARCHAR(64) NOT NULL UNIQUE,
-		origin JSONB,
 		content TEXT,
-		dumpInfo JSONB,
-		meta JSONB
+		meta JSONB,
+		message_id UUID REFERENCES document (id) ON DELETE CASCADE,
+		original JSONB,
+		dump_info JSONB
 	);

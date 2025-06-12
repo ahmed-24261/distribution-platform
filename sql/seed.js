@@ -201,6 +201,21 @@ async function seed() {
     }
     const [upload1, upload2, upload3, upload4, upload5] = uploadIds;
 
+    // insert sources
+    const sources = [
+      { name: "books", description: "books source" },
+      { name: "fruits", description: "fruits source" },
+    ];
+    const sourceQueries = `INSERT INTO source (name, description) VALUES ${sources
+      .map((resource) => `('${resource.name}', '${resource.description}')`)
+      .join(", ")} RETURNING id;`;
+
+    const sourceRes = await pool.query(sourceQueries);
+    const sourceIds = sourceRes.rows.map((row) => row.id);
+    if (sourceIds.length !== sources.length) {
+      throw new Error("some sources were not inserted");
+    }
+
     consoleLog("✅ Seed complete.", "green");
   } catch (error) {
     consoleLog("❌ Seed failed: " + error.message, "red");

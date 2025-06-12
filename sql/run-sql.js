@@ -1,5 +1,4 @@
 import fs from "fs";
-import path from "path";
 import { Pool } from "pg";
 import dotenv from "dotenv";
 import { consoleLog } from "../consoleLog/index.js";

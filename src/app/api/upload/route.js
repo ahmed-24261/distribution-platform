@@ -65,7 +65,7 @@ export const POST = async (request) => {
       );
 
       const exist = await getUploadByHash(recordData.hash);
-      if (exist) throw new HTTPError("Record already exists", 40);
+      if (exist) throw new HTTPError("Record already exists", 400);
 
       const uploadId = await createUploadTransaction(recordData, fileData);
 
