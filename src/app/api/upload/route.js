@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
-  getUploadsById,
+  getUploadsByIdWithUserAndFiches,
   getUploadsByIdAndUserId,
-  getAllUploads,
-  getUploadsByUserId,
+  getUploadsByIdAndUserIdWithUserAndFiches,
+  getAllUploadsWithUserAndFiches,
+  getUploadsByUserIdWithUserAndFiches,
   getUploadByHash,
   createUploadTransaction,
   deleteUploadTransaction,
-  updateUploadStatusById,
-  getUploadByIdWithUser,
 } from "@/lib/upload";
 import { validatePostData, constructPostData } from "@/lib/api/upload";
 import { HTTPError } from "@/lib/utils";
-import { redis } from "@/lib/redis";
-import { consoleLog } from "../../../../consoleLog";
 
 export const GET = async (request) => {
   try {
@@ -23,16 +20,20 @@ export const GET = async (request) => {
     const hasAllAccess = permissions.includes("CAN_GET_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_GET_OWN_UPLOADS");
 
+    console.log(permissions.join("\n"));
+
     const { searchParams } = new URL(request.url);
     const ids = searchParams.getAll("id");
 
     let records;
     if (hasAllAccess) {
-      records = ids.length ? await getUploadsById(ids) : await getAllUploads();
+      records = ids.length
+        ? await getUploadsByIdWithUserAndFiches(ids)
+        : await getAllUploadsWithUserAndFiches();
     } else if (hasOwnAccess) {
       records = ids.length
-        ? await getUploadsByIdAndUserId(ids, userId)
-        : await getUploadsByUserId(userId);
+        ? await getUploadsByIdAndUserIdWithUserAndFiches(ids, userId)
+        : await getUploadsByUserIdWithUserAndFiches(userId);
     } else {
       throw new HTTPError("Unauthorized: no upload access", 403);
     }
@@ -76,51 +77,6 @@ export const POST = async (request) => {
     } else {
       throw new HTTPError("Unauthorized: no upload access", 403);
     }
-  } catch (error) {
-    const isHTTPError = error instanceof HTTPError;
-    const message = isHTTPError ? error.getMessage() : "Internal server error";
-    const status = isHTTPError ? error.getStatus() : 500;
-
-    return NextResponse.json({ data: null, error: { message } }, { status });
-  }
-};
-
-export const PUT = async (request) => {
-  try {
-    const { id: userId, permissions = [] } = await getUser();
-
-    const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_UPLOADS");
-    const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_UPLOADS");
-
-    consoleLog("permissions:\n" + permissions.join("\n"), "yellow");
-
-    const jsonData = await request.json();
-    const { id } = jsonData;
-
-    if (!hasAllAccess && !hasOwnAccess) {
-      throw new HTTPError("Unauthorized: no UPDATE access", 403);
-    }
-
-    if (!id) {
-      throw new HTTPError("Bad request: id required", 400);
-    }
-
-    const upload = await getUploadByIdWithUser(id);
-    if (!upload) {
-      throw new HTTPError("Bad request: invalid id", 400);
-    }
-    if (upload.status !== "pending") {
-      // throw new HTTPError("Upload already processed", 400);
-    }
-
-    if (!hasAllAccess && userId !== upload.user_id) {
-      throw new HTTPError("Unauthorized: insufficient permissions", 403);
-    }
-
-    await updateUploadStatusById(id, "processing");
-    await redis.rPush("uploadsToProcess", id);
-
-    return NextResponse.json({ data: id, error: null }, { status: 200 });
   } catch (error) {
     const isHTTPError = error instanceof HTTPError;
     const message = isHTTPError ? error.getMessage() : "Internal server error";

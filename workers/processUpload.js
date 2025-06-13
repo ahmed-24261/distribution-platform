@@ -1,30 +1,21 @@
-import { createClient } from "redis";
-import pool from "./db.js";
+import { pool, redis } from "./lib.js";
 import dotenv from "dotenv";
-import { calculateFileHash } from "./utils.js";
-import { DateTime } from "luxon";
-import { HTTPError } from "./utils.js";
-
-dotenv.config();
-
-import StreamZip from "node-stream-zip";
+import { calculateFileHash, HTTPError } from "./utils.js";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
+import { DateTime } from "luxon";
+
+import StreamZip from "node-stream-zip";
 import { pipeline } from "stream/promises";
 
-import { consoleLog } from "../consoleLog/index.js";
+dotenv.config();
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 const TEMP_FOLDER = process.env.TEMP_FOLDER;
 
-const redis = createClient({ url: process.env.REDUS_URL });
-redis.on("error", (err) => console.error("Redis error:", err));
-
-await redis.connect();
-
-const processZipFile = async (filePath, outputDir, uploadId) => {
-  const mainOutputDir = path.join(outputDir, "main");
+const processZipFile = async (filePath, outputDir, fileName, uploadId) => {
+  const mainOutputDir = path.join(outputDir, "0", path.parse(fileName).name);
   await unzipFile(filePath, mainOutputDir);
   const filePaths = await listFilesRecursive(mainOutputDir);
 
@@ -34,15 +25,17 @@ const processZipFile = async (filePath, outputDir, uploadId) => {
     await processFolder(folder, filePaths, uploadId).catch(() => {});
   }
 
-  for (const filePath of filePaths) {
-    if (filePath.endsWith(".zip")) {
-      const nestedOutputDir = path.join(
-        outputDir,
-        "nested",
-        path.basename(filePath)
-      );
-      await processZipFile(filePath, nestedOutputDir, uploadId);
-    }
+  const nestedZipPaths = filePaths.filter((filePath) =>
+    filePath.endsWith(".zip")
+  );
+  for (const [index, filePath] of nestedZipPaths.entries()) {
+    const nestedOutputDir = path.join(outputDir, `${index + 1}`);
+    await processZipFile(
+      filePath,
+      nestedOutputDir,
+      path.basename(filePath),
+      uploadId
+    ).catch(() => {});
   }
 };
 
@@ -85,8 +78,8 @@ const unzipFile = async (filePath, outputDir) => {
         })
       );
     }
-  } catch (err) {
-    throw err;
+  } catch (error) {
+    throw error;
   } finally {
     await zip.close();
   }
@@ -122,15 +115,13 @@ const getFolders = (filePaths) => {
 
 const processFolder = async (folder, filePaths, uploadId) => {
   const productPaths = getProductPaths(folder, filePaths);
-  const jsonPath = productPaths.find((filePath) =>
-    filePath.endsWith("data.json")
-  );
-  const fichePath = productPaths.find((filePath) => filePath.endsWith(".docx"));
+  const jsonPath = productPaths.find((filePath) => isJson(folder, filePath));
+  const fichePath = productPaths.find((filePath) => isFiche(folder, filePath));
   const sourceDocPaths = productPaths.filter((filePath) =>
-    isSourceDoc(filePath, folder)
+    isSourceDoc(folder, filePath)
   );
   const originDocPaths = productPaths.filter((filePath) =>
-    isOriginDoc(filePath, folder)
+    isOriginDoc(folder, filePath)
   );
 
   const docPaths = {};
@@ -146,7 +137,7 @@ const processFolder = async (folder, filePaths, uploadId) => {
     const fileName = path.basename(originDocPath);
     const index = parseInt(fileName);
     if (!isNaN(index) && docPaths[index - 1]) {
-      docPaths[index - 1].originPath = originDocPath;
+      docPaths[index - 1].originalPath = originDocPath;
     }
   }
 
@@ -164,6 +155,7 @@ const processFolder = async (folder, filePaths, uploadId) => {
   const jsonContent = await fsp.readFile(jsonPath, "utf8");
   const { ficheData, docsData, pathsMapping } = await validateAndConstructData(
     folder,
+    jsonPath,
     jsonContent,
     fichePath,
     docPaths,
@@ -185,7 +177,23 @@ const getProductPaths = (folder, filePaths) => {
   return productPaths;
 };
 
-const isSourceDoc = (filePath, folder) => {
+const isJson = (folder, filePath) => {
+  const normalizeFolder = path.normalize(folder);
+  const normalizePath = path.normalize(path.dirname(filePath));
+
+  const jsonSuffix = "data.json";
+  return filePath.endsWith(jsonSuffix) && normalizeFolder === normalizePath;
+};
+
+const isFiche = (folder, filePath) => {
+  const normalizeFolder = path.normalize(folder);
+  const normalizePath = path.normalize(path.dirname(filePath));
+
+  const ficheExtension = ".docx";
+  return filePath.endsWith(ficheExtension) && normalizeFolder === normalizePath;
+};
+
+const isSourceDoc = (folder, filePath) => {
   const normalizeFolder = path.normalize(folder);
   const normalizePath = path.normalize(path.dirname(filePath));
 
@@ -196,7 +204,7 @@ const isSourceDoc = (filePath, folder) => {
   );
 };
 
-const isOriginDoc = (filePath, folder) => {
+const isOriginDoc = (folder, filePath) => {
   const normalizeFolder = path.normalize(path.join(folder, "Source"));
   const normalizePath = path.normalize(path.dirname(filePath));
   return normalizeFolder === normalizePath;
@@ -204,6 +212,7 @@ const isOriginDoc = (filePath, folder) => {
 
 const validateAndConstructData = async (
   folder,
+  jsonPath,
   jsonContent,
   fichePath,
   docPaths,
@@ -287,11 +296,7 @@ const validateAndConstructData = async (
       );
 
     for (const file of files) {
-      const fileName = file?.name?.filename;
-      const originalFileName = file?.original?.filename;
-      const type = file?.type;
-      const content = file?.content;
-      const meta = file?.meta;
+      const { type, fileName, originalFileName, content, meta } = file;
 
       if (!fileName)
         throw new HTTPError(
@@ -331,7 +336,7 @@ const validateAndConstructData = async (
       "fiches",
       sourceName,
       formatDateForPath,
-      folder
+      path.basename(folder)
     );
 
     const ref = "ABC-" + Math.floor(100 + Math.random() * 900);
@@ -348,18 +353,21 @@ const validateAndConstructData = async (
 
     pathsMapping.push([fichePath, ficheData.path]);
 
+    const jsonNewPath = path.join(productPath, path.basename(jsonPath));
+    pathsMapping.push([jsonPath, jsonNewPath]);
+
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
       const docData = {};
 
       if (!docPaths[index]?.sourcePath)
         throw new HTTPError(
-          `Le document '${file.filename}' est manquant dans le téléversement.`,
+          `Le document '${file.fileName}' est manquant dans le téléversement.`,
           400
         );
       if (!docPaths[index]?.originalPath)
         throw new HTTPError(
-          `L'original de document '${file.filename}' est manquant dans le téléversement.`,
+          `L'original du document '${file.fileName}' est manquant dans le téléversement.`,
           400
         );
 
@@ -369,7 +377,7 @@ const validateAndConstructData = async (
       const document = await getDocumentByHash(hash);
       if (document)
         throw new HTTPError(
-          `Le document '${file.filename}' existe déjà (hash du fichier déjà enregistré).`,
+          `Le document '${file.fileName}' existe déjà (hash du fichier déjà enregistré).`,
           409
         );
 
@@ -383,7 +391,7 @@ const validateAndConstructData = async (
       } = file;
 
       docData.type = type;
-      docData.file_name = fileName;
+      docData.fileName = fileName;
       docData.path = path.join(productPath, path.basename(sourcePath));
       docData.hash = hash;
       docData.content = content;
@@ -402,7 +410,7 @@ const validateAndConstructData = async (
       if (type === "File") {
         const originalHash = await calculateFileHash(originalPath);
         const original = {
-          file_name: originalFileName,
+          fileName: originalFileName,
           path: originalNewPath,
           hash: originalHash,
         };
@@ -434,6 +442,7 @@ const validateAndConstructData = async (
         : "Erreur interne du serveur";
 
     // failed fiche !!!
+    throw error;
   }
 };
 
@@ -469,9 +478,9 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
     for (const docData of docsData) {
       const docQuery = `
       INSERT INTO document
-      (type, fiche_id, file_name, path, hash, content, meta, dumpInfo, original, message_id)
+      (type, fiche_id, file_name, path, hash, content, meta, dump_info, original, message_id)
       values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
       const {
         type,
         fileName,
@@ -508,6 +517,7 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();
+    console.error(error);
   }
 };
 
@@ -596,27 +606,49 @@ const getSourceByName = async (name) => {
   }
 };
 
+const updateUploadStatusById = async (id, status) => {
+  try {
+    const query = `
+      UPDATE upload
+      SET status = $1
+      WHERE id = $2
+      RETURNING *; 
+    `;
+    const values = [status, id];
+
+    const { rows } = await pool.query(query, values);
+
+    return rows[0] ? rows[0] : null;
+  } catch (error) {
+    throw new Error("Failed update upload status by id");
+  }
+};
+
 while (true) {
   try {
     const result = await redis.blPop("uploadsToProcess", 0);
     const id = result?.element;
 
     const upload = await getUploadById(id);
-
-    if (!upload) {
+    if (!upload || upload.status !== "pending") {
       continue;
     }
 
+    await updateUploadStatusById(id, "processing");
+
     const outputDir = path.join(TEMP_FOLDER, id);
 
-    let { path: filePath } = upload;
+    let { path: filePath, file_name: fileName } = upload;
     filePath = path.join(FILE_STORAGE_PATH, filePath);
 
-    await processZipFile(filePath, outputDir, id);
+    await processZipFile(filePath, outputDir, fileName, id).catch(async () => {
+      await updateUploadStatusById(id, "failed");
+    });
+    await updateUploadStatusById(id, "completed");
 
     await fsp.rm(outputDir, { recursive: true, force: true });
 
-    consoleLog(`✅ Done with ID: ${id}`, "green");
+    console.log(`✅ Processing done with ID: ${id}`);
   } catch (err) {
     console.error("Worker error:", err);
   }

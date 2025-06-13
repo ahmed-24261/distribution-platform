@@ -20,13 +20,23 @@ CREATE TYPE fiche_status AS ENUM ('valid', 'suspended', 'canceled');
 CREATE TYPE document_type AS ENUM ('File', 'Message');
 
 -- Drop tables
-DROP TABLE IF EXISTS document,
+DROP TABLE IF EXISTS group_source,
+document,
 fiche,
 source,
 upload,
 user_permission,
 permission,
-"user" CASCADE;
+"user",
+"group" CASCADE;
+
+-- Create group table
+CREATE TABLE
+	"group" (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
+		name TEXT NOT NULL UNIQUE,
+		description TEXT UNIQUE
+	);
 
 -- Create user table
 CREATE TABLE
@@ -38,7 +48,8 @@ CREATE TABLE
 		status user_status DEFAULT 'active' NOT NULL,
 		created_at TIMESTAMP DEFAULT now () NOT NULL,
 		updated_at TIMESTAMP DEFAULT now () NOT NULL,
-		created_by UUID
+		created_by UUID REFERENCES "user" (id) ON DELETE CASCADE,
+		group_id UUID REFERENCES "group" (id) ON DELETE CASCADE
 	);
 
 -- Create permission table
@@ -111,4 +122,12 @@ CREATE TABLE
 		message_id UUID REFERENCES document (id) ON DELETE CASCADE,
 		original JSONB,
 		dump_info JSONB
+	);
+
+-- Create group_source table
+CREATE TABLE
+	group_source (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
+		group_id UUID NOT NULL REFERENCES "group" (id) ON DELETE CASCADE,
+		source_id UUID NOT NULL REFERENCES source (id) ON DELETE CASCADE
 	);

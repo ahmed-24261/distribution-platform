@@ -21,14 +21,45 @@ export const getUploadByIdWithUser = async (id) => {
   }
 };
 
-export const getUploadsById = async (ids) => {
+export const getUploadsByIdWithUserAndFiches = async (ids) => {
   try {
     const query = `
-    SELECT id, display_name, date, type, status, file_name, path, hash
-    FROM upload
-    WHERE id = ANY($1::uuid[])
-    ORDER BY date DESC
-  `;
+      SELECT 
+        u.id,
+        u.display_name as "displayName",
+        u.date,
+        u.type,
+        u.status,
+        u.file_name as "fileName",
+        u.path,
+        u.hash,
+        us.username,
+        COALESCE(
+          JSON_AGG(
+            jsonb_build_object(
+              'id', f.id,
+              'ref', f.ref,
+              'source', s.name,
+              'date', f.date,
+              'object', f.object,
+              'summary', f.summary,
+              'dateDistribute', f.date_distribute,
+              'status', f.status,
+              'path', f.path,
+              'hash', f.hash,
+              'dump', f.dump
+            )
+          ) FILTER (WHERE f.id IS NOT NULL),
+          '[]'
+        ) AS fiches
+      FROM upload u
+      LEFT JOIN "user" us ON u.user_id = us.id
+      LEFT JOIN fiche f ON f.upload_id = u.id
+      LEFT JOIN source s ON f.source_id = s.id
+      WHERE u.id = ANY($1::uuid[])
+      GROUP BY u.id, us.username
+      ORDER BY u.date DESC
+    `;
     const values = [ids];
 
     const { rows } = await pool.query(query, values);
@@ -55,12 +86,91 @@ export const getUploadsByIdAndUserId = async (ids, userId) => {
   }
 };
 
-export const getAllUploads = async () => {
+export const getUploadsByIdAndUserIdWithUserAndFiches = async (ids, userId) => {
   try {
     const query = `
-    SELECT id, display_name, date, type, status, file_name, path, hash
-    FROM upload
-    ORDER BY date DESC
+          SELECT 
+        u.id,
+        u.display_name as "displayName",
+        u.date,
+        u.type,
+        u.status,
+        u.file_name as "fileName",
+        u.path,
+        u.hash,
+        us.username,
+        COALESCE(
+          JSON_AGG(
+            jsonb_build_object(
+              'id', f.id,
+              'ref', f.ref,
+              'source', s.name,
+              'date', f.date,
+              'object', f.object,
+              'summary', f.summary,
+              'dateDistribute', f.date_distribute,
+              'status', f.status,
+              'path', f.path,
+              'hash', f.hash,
+              'dump', f.dump
+            )
+          ) FILTER (WHERE f.id IS NOT NULL),
+          '[]'
+        ) AS fiches
+      FROM upload u
+      LEFT JOIN "user" us ON u.user_id = us.id
+      LEFT JOIN fiche f ON f.upload_id = u.id
+      LEFT JOIN source s ON f.source_id = s.id
+      WHERE u.id = ANY($1::uuid[]) AND u.user_id = $2
+      GROUP BY u.id, us.username
+      ORDER BY u.date DESC
+  `;
+    const values = [ids, userId];
+
+    const { rows } = await pool.query(query, values);
+    return rows;
+  } catch (error) {
+    throw new Error("Failed to fetch uploads by id and userId");
+  }
+};
+
+export const getAllUploadsWithUserAndFiches = async () => {
+  try {
+    const query = `
+    SELECT 
+        u.id,
+        u.display_name as "displayName",
+        u.date,
+        u.type,
+        u.status,
+        u.file_name as "fileName",
+        u.path,
+        u.hash,
+        us.username,
+        COALESCE(
+          JSON_AGG(
+            jsonb_build_object(
+              'id', f.id,
+              'ref', f.ref,
+              'source', s.name,
+              'date', f.date,
+              'object', f.object,
+              'summary', f.summary,
+              'dateDistribute', f.date_distribute,
+              'status', f.status,
+              'path', f.path,
+              'hash', f.hash,
+              'dump', f.dump
+            )
+          ) FILTER (WHERE f.id IS NOT NULL),
+          '[]'
+        ) AS fiches
+      FROM upload u
+      LEFT JOIN "user" us ON u.user_id = us.id
+      LEFT JOIN fiche f ON f.upload_id = u.id
+      LEFT JOIN source s ON f.source_id = s.id
+      GROUP BY u.id, us.username
+      ORDER BY u.date DESC
   `;
 
     const { rows } = await pool.query(query);
@@ -70,13 +180,44 @@ export const getAllUploads = async () => {
   }
 };
 
-export const getUploadsByUserId = async (userId) => {
+export const getUploadsByUserIdWithUserAndFiches = async (userId) => {
   try {
     const query = `
-    SELECT id, display_name, date, type, status, file_name, path, hash
-    FROM upload
-    WHERE user_id = $1
-    ORDER BY date DESC
+    SELECT 
+        u.id,
+        u.display_name as "displayName",
+        u.date,
+        u.type,
+        u.status,
+        u.file_name as "fileName",
+        u.path,
+        u.hash,
+        us.username,
+        COALESCE(
+          JSON_AGG(
+            jsonb_build_object(
+              'id', f.id,
+              'ref', f.ref,
+              'source', s.name,
+              'date', f.date,
+              'object', f.object,
+              'summary', f.summary,
+              'dateDistribute', f.date_distribute,
+              'status', f.status,
+              'path', f.path,
+              'hash', f.hash,
+              'dump', f.dump
+            )
+          ) FILTER (WHERE f.id IS NOT NULL),
+          '[]'
+        ) AS fiches
+      FROM upload u
+      LEFT JOIN "user" us ON u.user_id = us.id
+      LEFT JOIN fiche f ON f.upload_id = u.id
+      LEFT JOIN source s ON f.source_id = s.id
+      WHERE u.user_id = $1
+      GROUP BY u.id, us.username
+      ORDER BY u.date DESC
   `;
     const values = [userId];
 
@@ -87,14 +228,14 @@ export const getUploadsByUserId = async (userId) => {
   }
 };
 
-export const countUploadsWhereDisplayNameLike = async (displayName) => {
+export const countUploadsWhereDisplayNameLike = async (like) => {
   try {
     const query = `
     SELECT id, display_name, date, type, status, file_name, path, hash
     FROM upload
     WHERE display_name LIKE $1
   `;
-    const values = [`${displayName}%`];
+    const values = [`${like}%`];
 
     const { rowCount } = await pool.query(query, values);
     return rowCount;
@@ -197,22 +338,4 @@ const unlinkFile = async (path) => {
   });
   await fs.unlink(absPath);
   await fs.rmdir(absDirPath).catch(() => {});
-};
-
-export const updateUploadStatusById = async (id, status) => {
-  try {
-    const query = `
-      UPDATE upload
-      SET status = $1
-      WHERE id = $2
-      RETURNING id, display_name, date, type, status, file_name, path, hash; 
-    `;
-    const values = [status, id];
-
-    const { rows } = await pool.query(query, values);
-
-    return rows[0] ? rows[0] : null;
-  } catch (error) {
-    throw new Error("Failed update upload status by id");
-  }
 };

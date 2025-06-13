@@ -18,7 +18,7 @@ async function seed() {
     consoleLog("🌱 Seeding database...", "magenta");
 
     // Reset the database
-    const resetQueries = `TRUNCATE TABLE upload, user_permission, permission, "user" CASCADE;`;
+    const resetQueries = `TRUNCATE TABLE group_source, document, fiche, source, upload, user_permission, permission, "user", "group" CASCADE;`;
     await pool.query(resetQueries);
 
     // Insert permissions
@@ -205,6 +205,7 @@ async function seed() {
     const sources = [
       { name: "books", description: "books source" },
       { name: "fruits", description: "fruits source" },
+      { name: "locations", description: "locations source" },
     ];
     const sourceQueries = `INSERT INTO source (name, description) VALUES ${sources
       .map((resource) => `('${resource.name}', '${resource.description}')`)
@@ -215,6 +216,43 @@ async function seed() {
     if (sourceIds.length !== sources.length) {
       throw new Error("some sources were not inserted");
     }
+
+    const [source1, source2, source3] = sourceIds;
+
+    // insert groups
+    const groups = [
+      { name: "group-books", description: "group for books" },
+      { name: "group-fruits", description: "group for fruits" },
+      { name: "group-all", description: "group for all" },
+    ];
+    const groupQueries = `INSERT INTO "group" (name, description) VALUES ${groups
+      .map((resource) => `('${resource.name}', '${resource.description}')`)
+      .join(", ")} RETURNING id;`;
+
+    const groupRes = await pool.query(groupQueries);
+    const groupIds = groupRes.rows.map((row) => row.id);
+    if (groupIds.length !== groups.length) {
+      throw new Error("some groups were not inserted");
+    }
+
+    const [group1, group2, group3] = groupIds;
+
+    // insert group_source
+    const groupSource = [
+      { groupId: group1, sourceId: source1 },
+
+      { groupId: group2, sourceId: source2 },
+
+      { groupId: group3, sourceId: source1 },
+      { groupId: group3, sourceId: source2 },
+      { groupId: group3, sourceId: source3 },
+    ];
+
+    const groupSourceQueries = `INSERT INTO group_source (group_id, source_id) VALUES ${groupSource
+      .map((gs) => `('${gs.groupId}', '${gs.sourceId}')`)
+      .join(", ")} RETURNING *;`;
+
+    const groupSourceRes = await pool.query(groupSourceQueries);
 
     consoleLog("✅ Seed complete.", "green");
   } catch (error) {
