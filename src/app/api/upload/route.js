@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
-  getUploadsByIdWithUserAndFiches,
-  getUploadsByIdAndUserId,
-  getUploadsByIdAndUserIdWithUserAndFiches,
-  getAllUploadsWithUserAndFiches,
-  getUploadsByUserIdWithUserAndFiches,
+  getUploadsWhere,
   getUploadByHash,
   createUploadTransaction,
   deleteUploadTransaction,
@@ -20,20 +16,18 @@ export const GET = async (request) => {
     const hasAllAccess = permissions.includes("CAN_GET_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_GET_OWN_UPLOADS");
 
-    console.log(permissions.join("\n"));
-
     const { searchParams } = new URL(request.url);
     const ids = searchParams.getAll("id");
 
     let records;
     if (hasAllAccess) {
       records = ids.length
-        ? await getUploadsByIdWithUserAndFiches(ids)
-        : await getAllUploadsWithUserAndFiches();
+        ? await getUploadsWhere({ id: ids })
+        : await getUploadsWhere();
     } else if (hasOwnAccess) {
       records = ids.length
-        ? await getUploadsByIdAndUserIdWithUserAndFiches(ids, userId)
-        : await getUploadsByUserIdWithUserAndFiches(userId);
+        ? await getUploadsWhere({ id: ids, user_id: userId })
+        : await getUploadsWhere({ user_id: userId });
     } else {
       throw new HTTPError("Unauthorized: no upload access", 403);
     }
@@ -104,52 +98,34 @@ export const DELETE = async (request) => {
     }
 
     const data = [];
-    const error = [];
-    if (hasAllAccess) {
-      for (const id of ids) {
-        await deleteUploadTransaction(id)
-          .then((id) => {
-            data.push(id);
-          })
-          .catch((error) => {
-            const message =
-              error instanceof HTTPError
-                ? error.getMessage()
-                : "Internal server error";
-            error.push({ id, message });
-          });
-      }
-    } else if (hasOwnAccess) {
-      const ownRecordes = await getUploadsByIdAndUserId(ids, userId);
-      const ownRecordIds = ownRecordes.map((upload) => upload.id);
-      for (const id of ids) {
-        if (!ownRecordIds.includes(id)) {
-          error.push({ id, message: "No access to record" });
-          continue;
-        }
-        await deleteUploadTransaction(id)
-          .then((id) => {
-            data.push(id);
-          })
-          .catch((error) => {
-            const message =
-              error instanceof HTTPError
-                ? error.getMessage()
-                : "Internal server error";
-            error.push({ id, message });
-          });
-      }
+
+    for (const id of ids) {
+      const deletedId = await deleteUploadTransaction(
+        id,
+        hasAllAccess ? null : userId
+      );
+      if (deletedId) data.push(deletedId);
     }
 
-    return NextResponse.json(
-      { data, error: error.length ? error : null },
-      { status: 200 }
-    );
+    const deletionCount = data.length;
+    if (!deletionCount) {
+      throw HTTPError("Aucun téléversement n'a été supprimé", 500);
+    }
+
+    const allSuccess = ids.length === deletionCount;
+    const message = allSuccess
+      ? "Tous téléversement sont supprimés"
+      : "Quelque téléversement n'ont pas supprimé";
+
+    return NextResponse.json({ success: true, data, message }, { status: 200 });
   } catch (error) {
     const isHTTPError = error instanceof HTTPError;
     const message = isHTTPError ? error.getMessage() : "Internal server error";
     const status = isHTTPError ? error.getStatus() : 500;
 
-    return NextResponse.json({ data: null, error: { message } }, { status });
+    return NextResponse.json(
+      { success: false, data: null, message },
+      { status }
+    );
   }
 };

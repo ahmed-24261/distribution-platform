@@ -23,6 +23,8 @@ import { useEffect, useState } from "react";
 import RenderStatus from "@/components/upload/uploadHistory/RenderStatus";
 import RenderType from "@/components/upload/uploadHistory/RenderType";
 
+import { DateTime } from "luxon";
+
 const UploadHistory = () => {
   const [uploads, setUploads] = useState([]);
   const { toast } = useToast();
@@ -46,7 +48,7 @@ const UploadHistory = () => {
     fetchData();
   }, []);
 
-  const handleRun = async (id) => {
+  const handleProcess = async (id) => {
     toast({
       title: "Traitement en cours",
       description:
@@ -92,7 +94,9 @@ const UploadHistory = () => {
   };
 
   const handleDelete = async (id) => {
-    const { success, data: deletedUploadId, message } = await deleteUpload(id);
+    const { data, error } = await fetch(`api/upload/id=${id}`, {
+      method: "DELETE",
+    });
 
     setUploads((prev) =>
       prev.filter((upload) => upload.id !== deletedUploadId)
@@ -126,12 +130,12 @@ const UploadHistory = () => {
               <TableRow>
                 <TableHead className="w-[5%]">#</TableHead>
                 <TableHead className="w-[15%]">Téléversement</TableHead>
-                <TableHead className="w-[13%]">Utilisateur</TableHead>
-                <TableHead className="w-[12%]">Statut</TableHead>
-                <TableHead className="w-[13%]">Fiches réussies</TableHead>
-                <TableHead className="w-[12%]">Type</TableHead>
-                <TableHead className="w-[15%]">Date</TableHead>
-                <TableHead className="text-center w-[15%]">Actions</TableHead>
+                <TableHead className="w-[15%]">Utilisateur</TableHead>
+                <TableHead className="w-[15%]">Statut</TableHead>
+                <TableHead className="w-[10%]">Fiches réussies</TableHead>
+                <TableHead className="w-[10%]">Type</TableHead>
+                <TableHead className="w-[20%]">Date</TableHead>
+                <TableHead className="text-center w-[10%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -160,22 +164,27 @@ const UploadHistory = () => {
                     </TableCell>
                     <TableCell>
                       <span className="px-2 py-1 bg-blue-50 text-blue-800 rounded-md font-medium">
-                        {upload.successfulFichesCount}/{upload.totalFichesCount}
+                        {upload.fiches.length}/
+                        {upload.fiches.length + upload.failedFiches.length}
                       </span>
                     </TableCell>
                     <TableCell>
                       <RenderType type={upload.type} />
                     </TableCell>
-                    <TableCell>{upload.date}</TableCell>
+                    <TableCell>
+                      {DateTime.fromISO(upload.date)
+                        .setLocale("fr")
+                        .toFormat("dd MMMM yyyy à HH:mm:ss")}
+                    </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex justify-center space-x-2">
-                        {upload.status === "Pending" && (
+                      <div className="flex justify-end space-x-2 pr-5">
+                        {upload.status === "pending" && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleRun(upload.id)}
+                                onClick={() => handleProcess(upload.id)}
                                 className="text-green-600 hover:text-green-800"
                               >
                                 <Play className="h-4 w-4" />

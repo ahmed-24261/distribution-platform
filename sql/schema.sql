@@ -131,3 +131,16 @@ CREATE TABLE
 		group_id UUID NOT NULL REFERENCES "group" (id) ON DELETE CASCADE,
 		source_id UUID NOT NULL REFERENCES source (id) ON DELETE CASCADE
 	);
+
+-- Create failed_fiche table
+CREATE TABLE
+	failed_fiche (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
+		source_id UUID REFERENCES source (id) ON DELETE CASCADE,
+		date TIMESTAMP DEFAULT now (),
+		created_by TEXT,
+		path TEXT UNIQUE,
+		hash VARCHAR(64) UNIQUE,
+		upload_id UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,
+		dump TEXT
+	);
