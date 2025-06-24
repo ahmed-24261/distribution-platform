@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
+  getUploadByIdWithUser,
   getUploadsWhere,
   getUploadByHash,
   createUploadTransaction,
@@ -32,13 +33,19 @@ export const GET = async (request) => {
       throw new HTTPError("Unauthorized: no upload access", 403);
     }
 
-    return NextResponse.json({ data: records, error: null }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: records, message: null },
+      { status: 200 }
+    );
   } catch (error) {
     const isHTTPError = error instanceof HTTPError;
     const message = isHTTPError ? error.getMessage() : "Internal server error";
     const status = isHTTPError ? error.getStatus() : 500;
 
-    return NextResponse.json({ data: null, error: { message } }, { status });
+    return NextResponse.json(
+      { success: false, data: null, message },
+      { status }
+    );
   }
 };
 
@@ -65,7 +72,11 @@ export const POST = async (request) => {
       const uploadId = await createUploadTransaction(recordData, fileData);
 
       return NextResponse.json(
-        { data: uploadId, error: null },
+        {
+          success: true,
+          data: uploadId,
+          message: "Téléversement est ajouté avec succès",
+        },
         { status: 201 }
       );
     } else {
@@ -76,7 +87,10 @@ export const POST = async (request) => {
     const message = isHTTPError ? error.getMessage() : "Internal server error";
     const status = isHTTPError ? error.getStatus() : 500;
 
-    return NextResponse.json({ data: null, error: { message } }, { status });
+    return NextResponse.json(
+      { success: false, data: null, message },
+      { status }
+    );
   }
 };
 
@@ -88,39 +102,36 @@ export const DELETE = async (request) => {
     const hasOwnAccess = permissions.includes("CAN_DELETE_OWN_UPLOADS");
 
     const { searchParams } = new URL(request.url);
-    const ids = searchParams.getAll("id");
+    const id = searchParams.get("id");
 
-    if (!ids.length) {
-      throw new HTTPError("Bad request: id required", 400);
-    }
     if (!hasAllAccess && !hasOwnAccess) {
       throw new HTTPError("Unauthorized: no DELETE access", 403);
     }
 
-    const data = [];
-
-    for (const id of ids) {
-      const deletedId = await deleteUploadTransaction(
-        id,
-        hasAllAccess ? null : userId
-      );
-      if (deletedId) data.push(deletedId);
+    if (!id) {
+      throw new HTTPError("Bad request: id required", 400);
     }
 
-    const deletionCount = data.length;
-    if (!deletionCount) {
-      throw HTTPError("Aucun téléversement n'a été supprimé", 500);
+    const upload = await getUploadByIdWithUser(id);
+    if (!upload) {
+      throw new HTTPError("Bad request: invalid id", 400);
     }
 
-    const allSuccess = ids.length === deletionCount;
-    const message = allSuccess
-      ? "Tous téléversement sont supprimés"
-      : "Quelque téléversement n'ont pas supprimé";
+    if (!hasAllAccess && userId !== upload.user_id) {
+      throw new HTTPError("Unauthorized: insufficient permissions", 403);
+    }
 
-    return NextResponse.json({ success: true, data, message }, { status: 200 });
+    await deleteUploadTransaction(id);
+
+    return NextResponse.json(
+      { success: true, data: id, message: "Téléversement est supprimé" },
+      { status: 200 }
+    );
   } catch (error) {
     const isHTTPError = error instanceof HTTPError;
-    const message = isHTTPError ? error.getMessage() : "Internal server error";
+    const message = isHTTPError
+      ? error.getMessage()
+      : "Erreur interne du serveur" + error.message;
     const status = isHTTPError ? error.getStatus() : 500;
 
     return NextResponse.json(

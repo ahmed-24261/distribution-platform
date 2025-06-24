@@ -73,7 +73,7 @@ export const getUploadsWhere = async (where = {}) => {
       LEFT JOIN source s2 ON ff.source_id = s2.id
       ${whereQuery}
       GROUP BY u.id, us.username
-      ORDER BY u.date DESC
+      ORDER BY u.date DESC;
   `;
 
     const { rows } = await pool.query(query, values);
@@ -171,24 +171,16 @@ const saveFile = async (recordData, fileData) => {
   await fs.writeFile(absPath, fileData);
 };
 
-export const deleteUploadTransaction = async (id, userId) => {
+export const deleteUploadTransaction = async (id) => {
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    const values = [id];
-    const clauses = ["id = $1"];
-
-    if (userId) {
-      values.push(userId);
-      clauses.push("user_id = $2");
-    }
-
     const query = `
           WITH deleted_upload AS (
               DELETE FROM upload
-              WHERE ${clauses.join(" AND ")}
+              WHERE id = $1
               RETURNING id, path
           )
           SELECT
@@ -203,10 +195,13 @@ export const deleteUploadTransaction = async (id, userId) => {
           GROUP BY
               du.id, du.path;
       `;
+    const values = [id];
 
     const { rows } = await client.query(query, values);
 
-    if (rows.length === 0) throw new HTTPError("Record not found", 404);
+    if (rows.length === 0) {
+      throw new HTTPError("Téléversement introuvable", 404);
+    }
 
     const { uPath, fichePaths, failedFichePaths } = rows[0];
 
@@ -223,25 +218,27 @@ export const deleteUploadTransaction = async (id, userId) => {
 
     await client.query("COMMIT");
     client.release();
-
-    return rows[0].id;
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();
-    return null;
+    throw error;
   }
 };
 
 const unlinkFile = async (filePath) => {
   const absPath = path.join(FILE_STORAGE_PATH, filePath);
   const absDirPath = path.dirname(absPath);
+
+  console.log(absPath);
+  console.log(absDirPath);
+
   await fs.rm(absPath);
-  await fs.rm(absDirPath, { force: true });
+  await fs.rmdir(absDirPath).catch(() => null);
 };
 
 const rmDirectory = async (dirPath) => {
   const absDirPath = path.join(FILE_STORAGE_PATH, dirPath);
   const absDirDirPath = path.dirname(absDirPath);
   await fs.rm(absDirPath, { recursive: true });
-  await fs.rm(absDirDirPath, { force: true });
+  await fs.rmdir(absDirDirPath).catch(() => null);
 };

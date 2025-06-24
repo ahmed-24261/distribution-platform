@@ -30,6 +30,9 @@ async function seed() {
       { name: "CAN_UPDATE_OWN_UPLOADS", description: "can update own upload" },
       { name: "CAN_DELETE_ALL_UPLOADS", description: "can delete all uploads" },
       { name: "CAN_DELETE_OWN_UPLOADS", description: "can delete own uploads" },
+
+      { name: "CAN_DELETE_ALL_FICHES", description: "can delete all fiches" },
+      { name: "CAN_DELETE_OWN_FICHES", description: "can delete own fiches" },
     ];
     const permissionQueries = `INSERT INTO permission (name, description) VALUES ${permissions
       .map((resource) => `('${resource.name}', '${resource.description}')`)
@@ -48,6 +51,8 @@ async function seed() {
       canUpdateOwnUpload,
       canDeleteAllUploads,
       canDeleteOwnUploads,
+      canDeleteAllFiches,
+      canDeleteOwnFiches,
     ] = permissionIds;
 
     // Insert users
@@ -110,6 +115,8 @@ async function seed() {
       { userId: superAdmin, permissionId: canUpdateOwnUpload },
       { userId: superAdmin, permissionId: canDeleteAllUploads },
       { userId: superAdmin, permissionId: canDeleteOwnUploads },
+      { userId: superAdmin, permissionId: canDeleteAllFiches },
+      { userId: superAdmin, permissionId: canDeleteOwnFiches },
 
       { userId: admin1, permissionId: canCreateUpload },
       { userId: admin1, permissionId: canGetAllUploads },
@@ -117,12 +124,15 @@ async function seed() {
       { userId: admin1, permissionId: canUpdateAllUpload },
       { userId: admin1, permissionId: canUpdateOwnUpload },
       { userId: admin1, permissionId: canDeleteAllUploads },
+      { userId: admin1, permissionId: canDeleteAllFiches },
+      { userId: admin1, permissionId: canDeleteOwnFiches },
 
       { userId: admin2, permissionId: canCreateUpload },
       { userId: admin2, permissionId: canGetOwnUploads },
       { userId: admin2, permissionId: canUpdateAllUpload },
       { userId: admin2, permissionId: canUpdateOwnUpload },
       { userId: admin2, permissionId: canDeleteOwnUploads },
+      { userId: admin2, permissionId: canDeleteOwnFiches },
 
       { userId: admin3, permissionId: canCreateUpload },
       { userId: admin3, permissionId: canGetAllUploads },
@@ -194,12 +204,12 @@ async function seed() {
       )
       .join(", ")} RETURNING id;`;
 
-    const uploadRes = await pool.query(uploadQueries);
-    const uploadIds = uploadRes.rows.map((row) => row.id);
-    if (uploadIds.length !== uploads.length) {
-      throw new Error("some uploads were not inserted");
-    }
-    const [upload1, upload2, upload3, upload4, upload5] = uploadIds;
+    // const uploadRes = await pool.query(uploadQueries);
+    // const uploadIds = uploadRes.rows.map((row) => row.id);
+    // if (uploadIds.length !== uploads.length) {
+    //   throw new Error("some uploads were not inserted");
+    // }
+    // const [upload1, upload2, upload3, upload4, upload5] = uploadIds;
 
     // insert sources
     const sources = [

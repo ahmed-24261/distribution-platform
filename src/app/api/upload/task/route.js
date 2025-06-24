@@ -37,12 +37,20 @@ export const POST = async (request) => {
       throw new HTTPError("Bad request: invalid task", 400);
     }
 
-    return NextResponse.json({ data: id, error: null }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: id, message: "Traitement du fichier en cours..." },
+      { status: 200 }
+    );
   } catch (error) {
     const isHTTPError = error instanceof HTTPError;
-    const message = isHTTPError ? error.getMessage() : "Internal server error";
+    const message = isHTTPError
+      ? error.getMessage()
+      : "Erreur interne du serveur";
     const status = isHTTPError ? error.getStatus() : 500;
 
-    return NextResponse.json({ data: null, error: { message } }, { status });
+    return NextResponse.json(
+      { success: false, data: null, message },
+      { status }
+    );
   }
 };

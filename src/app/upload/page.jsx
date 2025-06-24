@@ -17,7 +17,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import Link from "next/link";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
 import RenderStatus from "@/components/upload/uploadHistory/RenderStatus";
@@ -27,17 +27,15 @@ import { DateTime } from "luxon";
 
 const UploadHistory = () => {
   const [uploads, setUploads] = useState([]);
-  const { toast } = useToast();
 
   const fetchData = async () => {
     try {
       const response = await fetch("api/upload");
-      const { data, error } = await response.json();
-      console.log(data);
-      if (!error) {
+      const { success, data, message } = await response.json();
+      if (success) {
         setUploads(data);
       } else {
-        alert(error.message);
+        alert(message);
       }
     } catch (error) {
       alert(error.message);
@@ -49,28 +47,25 @@ const UploadHistory = () => {
   }, []);
 
   const handleProcess = async (id) => {
-    toast({
-      title: "Traitement en cours",
-      description:
-        "Le fichier est en cours de traitement. Veuillez patienter...",
+    const response = await fetch("api/upload/task", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id, task: "process" }),
     });
+
+    const { success, data, message } = await response.json();
+
     setUploads((prev) =>
       prev.map((upload) =>
-        upload.id === id ? { ...upload, status: "Processing" } : upload
+        upload.id === data ? { ...upload, status: "processing" } : upload
       )
     );
 
-    const { success, data, message } = await runUpload(id);
-
-    toast({
-      title: success ? "Traitement terminé" : "Échec du traitement",
+    toast(success ? "Traitement commencé" : "Échec du traitement", {
       description: message,
-      variant: success ? "default" : "destructive",
     });
-
-    setUploads((prev) =>
-      prev.map((upload) => (upload.id === id ? data : upload))
-    );
   };
 
   const handleDownload = async (filePath, fileName) => {
@@ -94,18 +89,16 @@ const UploadHistory = () => {
   };
 
   const handleDelete = async (id) => {
-    const { data, error } = await fetch(`api/upload/id=${id}`, {
+    const response = await fetch(`api/upload?id=${id}`, {
       method: "DELETE",
     });
 
-    setUploads((prev) =>
-      prev.filter((upload) => upload.id !== deletedUploadId)
-    );
+    const { success, data, message } = await response.json();
 
-    toast({
-      title: success ? "Ressource supprimée" : "Échec de la suppression",
+    setUploads((prev) => prev.filter((upload) => upload.id !== data));
+
+    toast(success ? "Téléversement supprimé" : "Échec de la suppression", {
       description: message,
-      variant: success ? "default" : "destructive",
     });
   };
 
