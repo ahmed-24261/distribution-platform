@@ -1,49 +1,125 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
-import { getFicheWithUserId, deleteFicheTransaction } from "@/lib/fiche";
+import { getFicheOwnerId, updateFicheById, deleteFicheById } from "@/lib/fiche";
 
 export const PUT = async (request) => {
   try {
     const { id: userId, permissions = [] } = await getUser();
 
-    const hasAllAccess = permissions.includes("CAN_UPDATE_FICHES");
-    const hasOwnAccess = permissions.includes("CAN_UPDATE_FICHES");
+    const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_FICHES");
+    const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_FICHES");
 
-    const formData = await request.formData();
+    const jsonData = await request.json();
+    if (Array.isArray(jsonData)) {
+      // Many fiches
+      const updatedFicheIds = [];
+      for (const item of jsonData) {
+        const { id, update } = item || {};
+        if (!id || !update) continue;
 
-    if (hasAccess) {
-      const { valid, message } = await validatePostData(formData);
-      if (!valid) throw new HTTPError(message, 400);
+        const ownerId = await getFicheOwnerId(id);
+        if (!hasAllAccess && (!hasOwnAccess || !ownerId || ownerId !== userId))
+          continue;
 
-      const { recordData, fileData } = await constructPostData(
-        formData,
-        userId
-      );
+        const ficheId = await updateFicheById(id, update);
+        if (!ficheId) continue;
+        updatedFicheIds.push(ficheId);
+      }
+      const total = jsonData.length;
+      const updated = updatedFicheIds.length;
 
-      const exist = await getUploadByHash(recordData.hash);
-      if (exist) throw new HTTPError("Record already exists", 400);
+      if (updated === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Failed to update all resources",
+            data: [],
+          },
+          { status: 500 }
+        );
+      } else if (updated < total) {
+        return NextResponse.json(
+          {
+            success: true,
+            message: `${updated} out of ${total} resource(s) have been successfully updated`,
+            data: updatedFicheIds,
+          },
+          { status: 200 }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            success: true,
+            message: `All resources have been successfully updated`,
+            data: updatedFicheIds,
+          },
+          { status: 200 }
+        );
+      }
+    } else {
+      // One fiche
+      const { id, update } = jsonData || {};
+      if (!id || !update) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Bad request: 'id' and 'update' required",
+            data: null,
+          },
+          { status: 400 }
+        );
+      }
+      const ownerId = await getFicheOwnerId(id);
+      if (!ownerId) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Not found: Resource not exist",
+            data: null,
+          },
+          { status: 404 }
+        );
+      }
+      if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Forbidden: You do not have permission to update this resource",
+            data: null,
+          },
+          { status: 403 }
+        );
+      }
 
-      const uploadId = await createUploadTransaction(recordData, fileData);
-
+      const ficheId = await updateFicheById(id, update);
+      if (!ficheId) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Failed to update resource",
+            data: null,
+          },
+          { status: 500 }
+        );
+      }
       return NextResponse.json(
         {
           success: true,
-          data: uploadId,
-          message: "Téléversement est ajouté avec succès",
+          message: "Resource was updated successfully",
+          data: ficheId,
         },
-        { status: 201 }
+        { status: 200 }
       );
-    } else {
-      throw new HTTPError("Unauthorized: no upload access", 403);
     }
   } catch (error) {
-    const isHTTPError = error instanceof HTTPError;
-    const message = isHTTPError ? error.getMessage() : "Internal server error";
-    const status = isHTTPError ? error.getStatus() : 500;
-
     return NextResponse.json(
-      { success: false, data: null, message },
-      { status }
+      {
+        success: false,
+        message: "Une erreur interne est survenue.",
+        data: null,
+      },
+      { status: 500 }
     );
   }
 };
@@ -58,79 +134,114 @@ export const DELETE = async (request) => {
     const { searchParams } = new URL(request.url);
     const ids = searchParams.getAll("id");
 
-    if (!hasAllAccess && !hasOwnAccess) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Non autorisé: pas d'accès SUPPRESSION",
-        },
-        { status: 403 }
-      );
-    }
+    if (ids.length > 1) {
+      // Many fiches
+      const deletedFicheIds = [];
+      for (const id of ids) {
+        if (!id) continue;
 
-    if (!ids.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Requête invalide: 'id' est requis",
-        },
-        { status: 400 }
-      );
-    }
+        const ownerId = await getFicheOwnerId(id);
+        if (!hasAllAccess && (!hasOwnAccess || !ownerId || ownerId !== userId))
+          continue;
 
-    const deletedFicheIds = [];
-    for (const id of ids) {
-      try {
-        const fiche = await getFicheWithUserId(id);
+        const ficheId = await deleteFicheById(id);
+        if (!ficheId) continue;
+        deletedFicheIds.push(ficheId);
+      }
+      const total = ids.length;
+      const deleted = deletedFicheIds.length;
 
-        if (fiche && (hasAllAccess || userId === fiche.userId)) {
-          await deleteFicheTransaction(id);
-          deletedFicheIds.push(id);
-        }
-      } catch {}
-    }
-
-    const fichesCount = ids.length;
-    const deletionCount = deletedFicheIds.length;
-    const isSingle = fichesCount === 1;
-
-    if (deletionCount === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: isSingle
-            ? "Impossible de supprimer la fiche."
-            : "Impossible de supprimer les fiches.",
-        },
-        { status: 500 }
-      );
-    } else if (deletionCount < fichesCount) {
-      return NextResponse.json(
-        {
-          success: true,
-          data: [],
-          message: `Seules ${deletionCount} sur ${fichesCount} fiches ont été supprimées.`,
-        },
-        { status: 207 }
-      );
+      if (deleted === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Failed to delete all resources",
+            data: [],
+          },
+          { status: 500 }
+        );
+      } else if (deleted < total) {
+        return NextResponse.json(
+          {
+            success: true,
+            message: `${deleted} out of ${total} resource(s) have been successfully deleted`,
+            data: deletedFicheIds,
+          },
+          { status: 200 }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            success: true,
+            message: `All resources have been successfully deleted`,
+            data: deletedFicheIds,
+          },
+          { status: 200 }
+        );
+      }
     } else {
+      // One fiche
+      const id = ids[0];
+      if (!id) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Bad request: 'id' required",
+            data: null,
+          },
+          { status: 400 }
+        );
+      }
+      const ownerId = await getFicheOwnerId(id);
+      if (!ownerId) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Not found: Resource not exist",
+            data: null,
+          },
+          { status: 404 }
+        );
+      }
+      if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Forbidden: You do not have permission to delete this resource",
+            data: null,
+          },
+          { status: 403 }
+        );
+      }
+
+      const ficheId = await deleteFicheById(id);
+      if (!ficheId) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Failed to delete resource",
+            data: null,
+          },
+          { status: 500 }
+        );
+      }
       return NextResponse.json(
         {
           success: true,
-          data: deletedFicheIds,
-          message: isSingle
-            ? "La fiche a été supprimée avec succès."
-            : "Toutes les fiches ont été supprimées avec succès.",
+          message: "Resource was deleted successfully",
+          data: ficheId,
         },
         { status: 200 }
       );
     }
   } catch (error) {
     return NextResponse.json(
-      { success: false, data: [], message: "Erreur interne du serveur" },
+      {
+        success: false,
+        data: null,
+        message: "Erreur interne du serveur.",
+      },
       { status: 500 }
     );
   }

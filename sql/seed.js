@@ -31,6 +31,9 @@ async function seed() {
       { name: "CAN_DELETE_ALL_UPLOADS", description: "can delete all uploads" },
       { name: "CAN_DELETE_OWN_UPLOADS", description: "can delete own uploads" },
 
+      { name: "CAN_UPDATE_ALL_FICHES", description: "can update all fiches" },
+      { name: "CAN_UPDATE_OWN_FICHES", description: "can update own fiches" },
+
       { name: "CAN_DELETE_ALL_FICHES", description: "can delete all fiches" },
       { name: "CAN_DELETE_OWN_FICHES", description: "can delete own fiches" },
     ];
@@ -51,6 +54,8 @@ async function seed() {
       canUpdateOwnUpload,
       canDeleteAllUploads,
       canDeleteOwnUploads,
+      canUpdateAllFiches,
+      canUpdateOwnFiches,
       canDeleteAllFiches,
       canDeleteOwnFiches,
     ] = permissionIds;
@@ -117,6 +122,8 @@ async function seed() {
       { userId: superAdmin, permissionId: canDeleteOwnUploads },
       { userId: superAdmin, permissionId: canDeleteAllFiches },
       { userId: superAdmin, permissionId: canDeleteOwnFiches },
+      { userId: superAdmin, permissionId: canUpdateAllFiches },
+      { userId: superAdmin, permissionId: canUpdateOwnFiches },
 
       { userId: admin1, permissionId: canCreateUpload },
       { userId: admin1, permissionId: canGetAllUploads },
@@ -126,6 +133,8 @@ async function seed() {
       { userId: admin1, permissionId: canDeleteAllUploads },
       { userId: admin1, permissionId: canDeleteAllFiches },
       { userId: admin1, permissionId: canDeleteOwnFiches },
+      { userId: admin1, permissionId: canUpdateAllFiches },
+      { userId: admin1, permissionId: canUpdateOwnFiches },
 
       { userId: admin2, permissionId: canCreateUpload },
       { userId: admin2, permissionId: canGetOwnUploads },
@@ -133,6 +142,7 @@ async function seed() {
       { userId: admin2, permissionId: canUpdateOwnUpload },
       { userId: admin2, permissionId: canDeleteOwnUploads },
       { userId: admin2, permissionId: canDeleteOwnFiches },
+      { userId: admin2, permissionId: canUpdateOwnFiches },
 
       { userId: admin3, permissionId: canCreateUpload },
       { userId: admin3, permissionId: canGetAllUploads },

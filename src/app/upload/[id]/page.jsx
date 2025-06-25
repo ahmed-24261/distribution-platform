@@ -13,7 +13,6 @@ import {
   Flag,
   Copy,
   ListFilter,
-  ShieldQuestion,
 } from "lucide-react";
 import {
   Table,
@@ -42,6 +41,7 @@ import Link from "next/link";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useState, useEffect, use } from "react";
+import { notFound } from "next/navigation";
 
 import RenderFicheStatus from "@/components/upload/consultUpload/RenderFicheStatus";
 
@@ -56,7 +56,7 @@ const ConsultUpload = ({ params }) => {
       const { success, data, message } = await response.json();
       if (success) {
         if (!data.length) {
-          alert("Not found");
+          notFound();
         } else {
           const upload = data[0];
           upload.fiches = upload.fiches.map((fiche) => ({
@@ -87,7 +87,6 @@ const ConsultUpload = ({ params }) => {
     }
   }, [upload]);
 
-  // handle successfulFiche actions
   const handleDownload = async ({ filePath, fileName, selectedOnes }) => {
     let request = "/api/download?";
     if (selectedOnes) {
@@ -122,7 +121,7 @@ const ConsultUpload = ({ params }) => {
           "Impossible de récupérer la ressource. Veuillez réessayer.",
       });
     }
-  }; ///
+  };
 
   const handleDeleteFiche = async (id) => {
     const searchParams = [];
@@ -137,19 +136,17 @@ const ConsultUpload = ({ params }) => {
         searchParams.push(`id=${id}`);
       });
     }
-    if (!searchParams) return;
 
     const response = await fetch(`/api/fiche?${searchParams.join("&")}`, {
       method: "DELETE",
     });
-    const { success, data, message } = await response.json();
-
-    setUpload((prev) => ({
-      ...prev,
-      fiches: prev.fiches.filter((fiche) => !data.includes(fiche.id)),
-    }));
+    const { success, message, data } = await response.json();
 
     if (success) {
+      setUpload((prev) => ({
+        ...prev,
+        fiches: prev.fiches.filter((fiche) => !data.includes(fiche.id)),
+      }));
       toast.success("Suppression réussie", {
         description: message,
       });
@@ -202,38 +199,43 @@ const ConsultUpload = ({ params }) => {
   };
 
   const applyChanges = async () => {
-    const fichesToBeUpdate = successfulFiches
+    const fichesToBeUpdate = upload.fiches
       .filter((fiche) => fiche.status !== fiche.newStatus && fiche.newStatus)
-      .map((fiche) => ({ id: fiche.id, status: fiche.newStatus }));
+      .map((fiche) => ({ id: fiche.id, update: { status: fiche.newStatus } }));
 
-    const {
-      success,
-      data: updatedFichesIds,
-      message,
-    } = await updateFichesStatus(fichesToBeUpdate);
-
-    setSuccessfulFiches((prev) =>
-      prev.map((fiche) => {
-        if (updatedFichesIds.includes(fiche.id)) {
-          return {
-            ...fiche,
-            status: fiche.newStatus,
-            newStatus: null,
-            selected: false,
-          };
-        }
-        if (!fichesToBeUpdate.includes(fiche.id) && fiche.selected) {
-          return { ...fiche, selected: false };
-        }
-        return fiche;
-      })
-    );
-
-    toast({
-      title: success ? "Ressources mises à jour" : "Échec de la mise à jour",
-      description: message,
-      variant: success ? "default" : "destructive",
+    const response = await fetch("/api/fiche", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(fichesToBeUpdate),
     });
+
+    const { success, message, data } = await response.json();
+
+    if (success) {
+      setUpload((prev) => ({
+        ...prev,
+        fiches: prev.fiches.map((fiche) =>
+          data.includes(fiche.id)
+            ? {
+                ...fiche,
+                status: fiche.newStatus,
+                newStatus: null,
+                selected: false,
+              }
+            : fiche
+        ),
+      }));
+
+      toast.success("Mettre à jour réussie", {
+        description: message,
+      });
+    } else {
+      toast.error("Échec de la mise à jour", {
+        description: message,
+      });
+    }
   };
 
   const toggleSelectItem = (id) => {

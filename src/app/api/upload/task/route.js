@@ -11,8 +11,7 @@ export const POST = async (request) => {
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_UPLOADS");
 
-    const jsonData = await request.json();
-    const { id, task } = jsonData;
+    const { id, task } = await request.json();
 
     if (!hasAllAccess && !hasOwnAccess) {
       throw new HTTPError("Unauthorized: no UPDATE access", 403);
