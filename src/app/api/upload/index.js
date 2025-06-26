@@ -1,4 +1,4 @@
-import * as pathLib from "path";
+import path from "path";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
 import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
@@ -60,52 +60,60 @@ export const validatePostData = async (formData) => {
 };
 
 export const constructPostData = async (formData, userId) => {
-  const type = formData.get("type");
+  try {
+    const type = formData.get("type");
 
-  const recordData = { userId, type };
-  let fileData;
+    const uploadData = { userId, type };
 
-  const date = new Date("2022-12-14");
-  const formatDate = DateTime.fromJSDate(date).setLocale("fr");
-  const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
-  const formatDateForPath = formatDate.toFormat("yyyyMMdd");
+    let fileData;
 
-  const rank = (await countUploadsWhereDisplayNameLike(formatDateForName)) + 1;
+    const date = new Date("2022-12-14");
+    const formatDate = DateTime.fromJSDate(date).setLocale("fr");
+    const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
+    const formatDateForPath = formatDate.toFormat("yyyyMMdd");
 
-  const dirPath = pathLib.join("data", "uploads", formatDateForPath);
+    const count = await countUploadsWhereDisplayNameLike(formatDateForName);
+    if (count !== 0 && !count) return null;
 
-  const displayName = `${formatDateForName}-${type}-${rank}`;
+    const rank = count + 1;
 
-  recordData.date = date.toISOString();
-  recordData.displayName = displayName;
+    const dirPath = path.join("data", "uploads", formatDateForPath);
 
-  if (type === "file" || type === "api") {
-    const file = formData.get("file");
+    const displayName = `${formatDateForName}-${type}-${rank}`;
 
-    const fileName = file.name;
-    const path = pathLib.join(dirPath, `${rank} - ${type} - ${fileName}`);
+    uploadData.date = date.toISOString();
+    uploadData.displayName = displayName;
 
-    recordData.fileName = fileName;
-    recordData.path = path;
+    if (type === "file" || type === "api") {
+      const file = formData.get("file");
 
-    fileData = Buffer.from(await file.arrayBuffer());
-    recordData.hash = calculateFileHash(fileData);
-  } else {
-    const source = formData.get("source");
-    const object = formData.get("object");
-    const summary = formData.get("summary");
-    const documents = formData.getAll("documents");
+      const fileName = file.name;
+      const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
 
-    let dump = formData.get("dump");
+      uploadData.fileName = fileName;
+      uploadData.path = filePath;
 
-    // construct data.json and fiche.docx
-    // create a zipFile as fileData
-    // calculate hash of the zipFile
-    // suggest a fileName and path
+      fileData = Buffer.from(await file.arrayBuffer());
+      uploadData.hash = calculateFileHash(fileData);
+    } else {
+      const source = formData.get("source");
+      const object = formData.get("object");
+      const summary = formData.get("summary");
+      const documents = formData.getAll("documents");
 
-    const fileName = `${formatDateForName}_formulaire.zip`;
-    const path = pathLib.join(dirPath, `${rank} - ${type} - ${fileName}`);
+      let dump = formData.get("dump");
+
+      // construct data.json and fiche.docx
+      // create a zipFile as fileData
+      // calculate hash of the zipFile
+      // suggest a fileName and path
+
+      const fileName = `${formatDateForName}_formulaire.zip`;
+      const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
+    }
+
+    return { uploadData, fileData };
+  } catch {
+    return null;
   }
-
-  return { recordData, fileData };
 };

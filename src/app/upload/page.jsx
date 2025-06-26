@@ -35,7 +35,7 @@ const UploadHistory = () => {
       if (success) {
         setUploads(data);
       } else {
-        alert(message);
+        alert("GET api/upload: " + message);
       }
     } catch (error) {
       alert(error.message);

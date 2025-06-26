@@ -20,12 +20,12 @@ CREATE TYPE fiche_status AS ENUM ('valid', 'suspended', 'canceled');
 CREATE TYPE document_type AS ENUM ('File', 'Message');
 
 -- Drop tables
-DROP TABLE IF EXISTS group_source,
+DROP TABLE IF EXISTS "groupSource",
 document,
 fiche,
 source,
 upload,
-user_permission,
+"userPermission",
 permission,
 "user",
 "group" CASCADE;
@@ -46,10 +46,10 @@ CREATE TABLE
 		password VARCHAR(64) NOT NULL,
 		role user_role DEFAULT 'user' NOT NULL,
 		status user_status DEFAULT 'active' NOT NULL,
-		created_at TIMESTAMP DEFAULT now () NOT NULL,
-		updated_at TIMESTAMP DEFAULT now () NOT NULL,
-		created_by UUID REFERENCES "user" (id) ON DELETE CASCADE,
-		group_id UUID REFERENCES "group" (id) ON DELETE CASCADE
+		"createdAt" TIMESTAMP DEFAULT now () NOT NULL,
+		"updatedAt" TIMESTAMP DEFAULT now () NOT NULL,
+		"createdBy" UUID REFERENCES "user" (id) ON DELETE CASCADE,
+		"groupId" UUID REFERENCES "group" (id) ON DELETE CASCADE
 	);
 
 -- Create permission table
@@ -62,22 +62,22 @@ CREATE TABLE
 
 -- Create user_permission junction table
 CREATE TABLE
-	user_permission (
-		user_id UUID NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
-		permission_id UUID NOT NULL REFERENCES permission (id) ON DELETE CASCADE,
-		PRIMARY KEY (user_id, permission_id)
+	"userPermission" (
+		"userId" UUID NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+		"permissionId" UUID NOT NULL REFERENCES permission (id) ON DELETE CASCADE,
+		PRIMARY KEY ("userId", "permissionId")
 	);
 
 -- Create upload table
 CREATE TABLE
 	upload (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
-		user_id UUID NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
-		display_name TEXT NOT NULL UNIQUE,
+		"userId" UUID NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+		"displayName" TEXT NOT NULL UNIQUE,
 		date TIMESTAMP DEFAULT now () NOT NULL,
 		type upload_type NOT NULL,
 		status upload_status DEFAULT 'pending' NOT NULL,
-		file_name TEXT NOT NULL,
+		"fileName" TEXT NOT NULL,
 		path TEXT NOT NULL UNIQUE,
 		hash VARCHAR(64) NOT NULL UNIQUE
 	);
@@ -95,16 +95,16 @@ CREATE TABLE
 	fiche (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
 		ref VARCHAR(32) NOT NULL UNIQUE,
-		source_id UUID NOT NULL REFERENCES source (id) ON DELETE CASCADE,
+		"sourceId" UUID NOT NULL REFERENCES source (id) ON DELETE CASCADE,
 		date TIMESTAMP DEFAULT now () NOT NULL,
 		object TEXT NOT NULL,
 		summary TEXT NOT NULL,
-		created_by TEXT,
-		date_distribute TIMESTAMP,
+		"createdBy" TEXT,
+		"dateDistribute" TIMESTAMP,
 		status fiche_status DEFAULT 'suspended' NOT NULL,
 		path TEXT NOT NULL UNIQUE,
 		hash VARCHAR(64) NOT NULL UNIQUE,
-		upload_id UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,
+		"uploadId" UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,
 		dump TEXT
 	);
 
@@ -113,34 +113,34 @@ CREATE TABLE
 	document (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
 		type document_type NOT NULL,
-		fiche_id UUID REFERENCES fiche (id) ON DELETE CASCADE,
-		file_name TEXT NOT NULL,
+		"ficheId" UUID REFERENCES fiche (id) ON DELETE CASCADE,
+		"fileName" TEXT NOT NULL,
 		path TEXT NOT NULL UNIQUE,
 		hash VARCHAR(64) NOT NULL UNIQUE,
 		content TEXT,
 		meta JSONB,
-		message_id UUID REFERENCES document (id) ON DELETE CASCADE,
+		"messageId" UUID REFERENCES document (id) ON DELETE CASCADE,
 		original JSONB,
-		dump_info JSONB
+		"dumpInfo" JSONB
 	);
 
 -- Create group_source table
 CREATE TABLE
-	group_source (
+	"groupSource" (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
-		group_id UUID NOT NULL REFERENCES "group" (id) ON DELETE CASCADE,
-		source_id UUID NOT NULL REFERENCES source (id) ON DELETE CASCADE
+		"groupId" UUID NOT NULL REFERENCES "group" (id) ON DELETE CASCADE,
+		"sourceId" UUID NOT NULL REFERENCES source (id) ON DELETE CASCADE
 	);
 
 -- Create failed_fiche table
 CREATE TABLE
-	failed_fiche (
+	"failedFiche" (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
-		source_id UUID REFERENCES source (id) ON DELETE CASCADE,
+		"sourceId" UUID REFERENCES source (id) ON DELETE CASCADE,
 		date TIMESTAMP DEFAULT now (),
-		created_by TEXT,
+		"createdBy" TEXT,
 		path TEXT UNIQUE,
 		hash VARCHAR(64) UNIQUE,
-		upload_id UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,
+		"uploadId" UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,
 		dump TEXT
 	);

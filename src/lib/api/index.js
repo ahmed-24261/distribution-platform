@@ -1,10 +1,18 @@
 import { getUserByUsername, getUserByIdWithPermissions } from "@/lib/user";
 
 export const getUser = async () => {
+  // change this two lines by cookies.getUser()
+
   const username = "admin1";
-  const { id: userId } = await getUserByUsername(username);
+  const response = await getUserByUsername(username);
+  if (response.ok) {
+    const { id: userId } = response.data;
+    const userResponse = await getUserByIdWithPermissions(userId);
+    if (userResponse.ok) {
+      return userResponse.data;
+    }
+    return null;
+  }
 
-  const user = await getUserByIdWithPermissions(userId);
-
-  return user;
+  return null;
 };

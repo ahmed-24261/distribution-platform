@@ -14,7 +14,10 @@ export const POST = async (request) => {
     const { id, task } = await request.json();
 
     if (!hasAllAccess && !hasOwnAccess) {
-      throw new HTTPError("Unauthorized: no UPDATE access", 403);
+      return NextResponse.json(
+        { success: false, data: [], message: "Forbidden: no UPDATE access" },
+        { status: 403 }
+      );
     }
 
     if (!id || !task) {

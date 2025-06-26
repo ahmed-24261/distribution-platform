@@ -1,58 +1,42 @@
 import pool from "@/lib/db";
 
-export const getUserById = async (id) => {
-  try {
-    const query =
-      'SELECT id, username, role, status, created_at,updated_at, created_by FROM "user" WHERE id = $1';
-    const values = [id];
-
-    const { rows } = await pool.query(query, values);
-
-    const user = rows.length === 0 ? null : rows[0];
-
-    return user;
-  } catch (error) {
-    throw new Error("Failed to fetch user by id");
-  }
-};
-
 export const getUserByIdWithPermissions = async (id) => {
   try {
     const query = `
-      SELECT u.id, u.username, u.role, u.status, u.created_at, u.updated_at, u.created_by,
+      SELECT u.id, u.username, u.role, u.status, u."createdAt", u."updatedAt", u."createdBy",
              array_agg(p.name) AS permissions
       FROM "user" u
-      LEFT JOIN user_permission up ON u.id = up.user_id
-      LEFT JOIN permission p ON up.permission_id = p.id
+      LEFT JOIN "userPermission" up ON u.id = up."userId"
+      LEFT JOIN permission p ON up."permissionId" = p.id
       WHERE u.id = $1
       GROUP BY u.id;
     `;
     const values = [id];
 
-    const { rows } = await pool.query(query, values);
+    const { rows, rowCount } = await pool.query(query, values);
 
-    const user = rows.length === 0 ? null : rows[0];
+    if (!rowCount) return { not_found: true };
 
-    return user;
-  } catch (error) {
-    throw new Error("Failed to fetch user by id with permissions");
+    return { ok: true, data: rows[0] };
+  } catch {
+    return { error: true };
   }
 };
 
 export const getUserByUsername = async (username) => {
   try {
     const query = `
-      SELECT id, username, role, status, created_at, updated_at, created_by 
+      SELECT id, username, role, status, "createdAt", "updatedAt", "createdBy" 
       FROM "user" 
       WHERE username = $1`;
     const values = [username];
 
-    const { rows } = await pool.query(query, values);
+    const { rows, rowCount } = await pool.query(query, values);
 
-    const user = rows.length === 0 ? null : rows[0];
+    if (!rowCount) return { not_found: true };
 
-    return user;
-  } catch (error) {
-    throw new Error("Failed to fetch user by username");
+    return { ok: true, data: rows[0] };
+  } catch {
+    return { error: true };
   }
 };
