@@ -2,6 +2,69 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import { getFicheOwnerId, updateFicheById, deleteFicheById } from "@/lib/fiche";
 
+export const GET = async (request) => {
+  try {
+    const { id: userId, permissions = [] } = await getUser();
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: "Internal server error: failed to fetch userId",
+        },
+        { status: 500 }
+      );
+    }
+
+    const hasAllAccess = permissions.includes("CAN_GET_ALL_FICHES");
+    const hasOwnAccess = permissions.includes("CAN_GET_OWN_FICHES");
+
+    if (!hasAllAccess && !hasOwnAccess) {
+      return NextResponse.json(
+        { success: false, data: [], message: "Forbidden: no GET access" },
+        { status: 403 }
+      );
+    }
+
+    const validationResult = validateGetRequest(request);
+    if (!validationResult.valid) {
+      return NextResponse.json(
+        { success: false, data: [], message: validationResult.message },
+        { status: 400 }
+      );
+    }
+
+    const { ids } = validationResult.output;
+
+    const where = {};
+    if (ids.length) where.id = ids;
+    if (!hasAllAccess) where.userId = userId;
+
+    const getResponse = await getUploadsWhere(where);
+    if (getResponse.ok) {
+      return NextResponse.json(
+        { success: true, data: getResponse.data, message: null },
+        { status: 200 }
+      );
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: "Internal server error: failed to fetch uploads",
+        },
+        { status: 500 }
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { success: false, data: [], message: "Internal server error" },
+      { status: 500 }
+    );
+  }
+};
+
 export const PUT = async (request) => {
   try {
     const { id: userId, permissions = [] } = await getUser();

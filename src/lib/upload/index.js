@@ -23,6 +23,7 @@ export const getUploadsWhere = async (where = {}) => {
     if (clauses.length > 0) {
       whereQuery = "WHERE " + clauses.join(" AND ");
     }
+
     const query = `
       SELECT 
         u.id,
@@ -34,50 +35,79 @@ export const getUploadsWhere = async (where = {}) => {
         u.path,
         u.hash,
         us.username,
-        COALESCE(
-          JSON_AGG(
-            jsonb_build_object(
-              'id', f.id,
-              'ref', f.ref,
-              'source', s.name,
-              'date', f.date,
-              'object', f.object,
-              'summary', f.summary,
-              'dateDistribute', f."dateDistribute",
-              'status', f.status,
-              'path', f.path,
-              'hash', f.hash,
-              'dump', f.dump
-            )
-          ) FILTER (WHERE f.id IS NOT NULL),
-          '[]'
+
+        -- FICHES ORDERED BY REF
+        (
+          SELECT COALESCE(
+            JSON_AGG(
+              jsonb_build_object(
+                'id', f.id,
+                'ref', f.ref,
+                'source', s.name,
+                'date', f.date,
+                'object', f.object,
+                'summary', f.summary,
+                'dateDistribute', f."dateDistribute",
+                'status', f.status,
+                'path', f.path,
+                'hash', f.hash,
+                'dump', f.dump
+              )
+              ORDER BY f.ref
+            ),
+            '[]'
+          )
+          FROM fiche f
+          LEFT JOIN source s ON f."sourceId" = s.id
+          WHERE f."uploadId" = u.id
         ) AS fiches,
-        COALESCE(
-          JSON_AGG(DISTINCT
-            jsonb_build_object(
-              'id', ff.id,
-              'source', s2.name,
-              'date', ff.date,
-              'path', ff.path,
-              'hash', ff.hash
-            )
-          ) FILTER (WHERE ff.id IS NOT NULL),
-          '[]'
+
+        -- FAILED FICHES ORDERED BY ID
+        (
+          SELECT COALESCE(
+            JSON_AGG(
+              jsonb_build_object(
+                'id', ff.id,
+                'source', s2.name,
+                'date', ff.date,
+                'path', ff.path,
+                'hash', ff.hash
+              )
+              ORDER BY ff.id
+            ),
+            '[]'
+          )
+          FROM "failedFiche" ff
+          LEFT JOIN source s2 ON ff."sourceId" = s2.id
+          WHERE ff."uploadId" = u.id
         ) AS "failedFiches"
+
       FROM upload u
       LEFT JOIN "user" us ON u."userId" = us.id
-      LEFT JOIN fiche f ON f."uploadId" = u.id
-      LEFT JOIN source s ON f."sourceId" = s.id
-      LEFT JOIN "failedFiche" ff ON ff."uploadId" = u.id
-      LEFT JOIN source s2 ON ff."sourceId" = s2.id
       ${whereQuery}
       GROUP BY u.id, us.username
       ORDER BY u.date DESC;
-  `;
+    `;
 
     const { rows } = await pool.query(query, values);
-
     return { ok: true, data: rows };
+  } catch {
+    return { error: true };
+  }
+};
+
+export const getUploadById = async (id) => {
+  try {
+    const query = `
+    SELECT * 
+    FROM upload
+    WHERE id = $1;`;
+    const values = [id];
+
+    const { rows, rowCount } = await pool.query(query, values);
+
+    if (!rowCount) return { not_found: true };
+    return { ok: true, data: rows[0] };
   } catch {
     return { error: true };
   }

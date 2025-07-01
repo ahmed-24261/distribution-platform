@@ -18,7 +18,7 @@ async function seed() {
     consoleLog("🌱 Seeding database...", "magenta");
 
     // Reset the database
-    const resetQueries = `TRUNCATE TABLE "groupSource", document, fiche, source, upload, "userPermission", permission, "user", "group" CASCADE;`;
+    const resetQueries = `TRUNCATE TABLE "failedFiche", "groupSource", document, fiche, source, upload, "userPermission", permission, "user", "group" CASCADE;`;
     await pool.query(resetQueries);
 
     // Insert permissions
@@ -31,11 +31,29 @@ async function seed() {
       { name: "CAN_DELETE_ALL_UPLOADS", description: "can delete all uploads" },
       { name: "CAN_DELETE_OWN_UPLOADS", description: "can delete own uploads" },
 
+      {
+        name: "CAN_DOWNLOAD_ALL_UPLOADS",
+        description: "can download all uploads",
+      },
+      {
+        name: "CAN_DOWNLOAD_OWN_UPLOADS",
+        description: "can download own uploads",
+      },
+
       { name: "CAN_UPDATE_ALL_FICHES", description: "can update all fiches" },
       { name: "CAN_UPDATE_OWN_FICHES", description: "can update own fiches" },
 
       { name: "CAN_DELETE_ALL_FICHES", description: "can delete all fiches" },
       { name: "CAN_DELETE_OWN_FICHES", description: "can delete own fiches" },
+
+      {
+        name: "CAN_DOWNLOAD_ALL_FICHES",
+        description: "can download all fiches",
+      },
+      {
+        name: "CAN_DOWNLOAD_OWN_FICHES",
+        description: "can download own fiches",
+      },
     ];
     const permissionQueries = `INSERT INTO permission (name, description) VALUES ${permissions
       .map((resource) => `('${resource.name}', '${resource.description}')`)
@@ -54,10 +72,14 @@ async function seed() {
       canUpdateOwnUpload,
       canDeleteAllUploads,
       canDeleteOwnUploads,
+      canDownloadAllUploads,
+      canDownloadOwnUploads,
       canUpdateAllFiches,
       canUpdateOwnFiches,
       canDeleteAllFiches,
       canDeleteOwnFiches,
+      canDownloadAllFiches,
+      canDownloadOwnFiches,
     ] = permissionIds;
 
     // Insert users
@@ -131,25 +153,32 @@ async function seed() {
       { userId: admin1, permissionId: canUpdateAllUpload },
       { userId: admin1, permissionId: canUpdateOwnUpload },
       { userId: admin1, permissionId: canDeleteAllUploads },
+      { userId: admin1, permissionId: canDownloadAllUploads },
+
       { userId: admin1, permissionId: canDeleteAllFiches },
       { userId: admin1, permissionId: canDeleteOwnFiches },
       { userId: admin1, permissionId: canUpdateAllFiches },
       { userId: admin1, permissionId: canUpdateOwnFiches },
+      { userId: admin1, permissionId: canDownloadAllFiches },
 
       { userId: admin2, permissionId: canCreateUpload },
       { userId: admin2, permissionId: canGetOwnUploads },
-      { userId: admin2, permissionId: canUpdateAllUpload },
       { userId: admin2, permissionId: canUpdateOwnUpload },
       { userId: admin2, permissionId: canDeleteOwnUploads },
+      { userId: admin2, permissionId: canDownloadOwnUploads },
+      { userId: admin2, permissionId: canDownloadOwnFiches },
+
       { userId: admin2, permissionId: canDeleteOwnFiches },
       { userId: admin2, permissionId: canUpdateOwnFiches },
 
       { userId: admin3, permissionId: canCreateUpload },
       { userId: admin3, permissionId: canGetAllUploads },
       { userId: admin3, permissionId: canGetOwnUploads },
-      { userId: admin3, permissionId: canDeleteAllUploads },
+      { userId: admin3, permissionId: canDeleteOwnUploads },
+      { userId: admin3, permissionId: canUpdateOwnUpload },
 
       { userId: admin4, permissionId: canCreateUpload },
+      { userId: admin4, permissionId: canGetAllUploads },
     ];
 
     const userPermissionQueries = `INSERT INTO "userPermission" ("userId", "permissionId") VALUES ${userPermission
@@ -276,7 +305,7 @@ async function seed() {
 
     consoleLog("✅ Seed complete.", "green");
   } catch (error) {
-    consoleLog("❌ Seed failed: " + error.message, "red");
+    consoleLog("❌ Seed failed: " + error, "red");
   } finally {
     await pool.end();
     process.exit(0);

@@ -63,31 +63,43 @@ const UploadHistory = () => {
       )
     );
 
-    toast(success ? "Traitement commencé" : "Échec du traitement", {
-      description: message,
-    });
-  };
-
-  const handleDownload = async (filePath, fileName) => {
-    const request = `/api/download?filePath=${filePath}&fileName=${fileName}`;
-    try {
-      const response = await fetch(request);
-      if (!response.ok) {
-        throw new Error();
-      }
-      toast({
-        title: "Téléchargement lancé",
-        description: "Votre fichier est en cours de téléchargement.",
+    if (success) {
+      toast.success("Traitement commencé", {
+        description: message,
       });
-      window.location.href = request;
-    } catch {
-      toast({
-        title: "Erreur lors du téléchargement",
-        description: "Impossible de récupérer le fichier. Veuillez réessayer.",
+    } else {
+      toast.error("Échec du traitement", {
+        description: message,
       });
     }
   };
 
+  const handleDownload = async (filePath, fileName) => {
+    try {
+      let request = `/api/download?filePath=${filePath}`;
+
+      if (fileName) {
+        request = request + `&fileName=${fileName}`;
+      }
+      const response = await fetch(request);
+      if (!response.ok) {
+        const { message } = await response.json();
+        toast.error("Erreur lors du téléchargement", {
+          description: message,
+        });
+        return;
+      }
+      toast.success("Téléchargement lancé", {
+        description: "Votre ressource est en cours de téléchargement",
+      });
+
+      window.location.href = request;
+    } catch {
+      toast.error("Erreur lors du téléchargement", {
+        description: "Impossible de récupérer la ressource. Veuillez réessayer",
+      });
+    }
+  };
   const handleDelete = async (id) => {
     const response = await fetch(`api/upload?id=${id}`, {
       method: "DELETE",

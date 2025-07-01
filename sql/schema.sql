@@ -20,7 +20,8 @@ CREATE TYPE fiche_status AS ENUM ('valid', 'suspended', 'canceled');
 CREATE TYPE document_type AS ENUM ('File', 'Message');
 
 -- Drop tables
-DROP TABLE IF EXISTS "groupSource",
+DROP TABLE IF EXISTS "failedFiche",
+"groupSource",
 document,
 fiche,
 source,

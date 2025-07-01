@@ -93,43 +93,72 @@ const ConsultUpload = ({ params }) => {
     }
   }, [selectedItems]);
 
-  const handleDownload = async ({ filePath, fileName, selectedOnes }) => {
-    let request = "/api/download?";
-    if (selectedOnes) {
-      const selectedFichesPaths = successfulFiches
-        .filter((fiche) => fiche.selected)
-        .map((fiche) => fiche.path);
-      const query = selectedFichesPaths
-        .map((path) => `filePath=${encodeURIComponent(path)}`)
-        .join("&");
-      request = request + query;
-    } else {
-      request = request + `filePath=${filePath}`;
-    }
-
-    if (fileName) {
-      request = request + `&fileName=${fileName}`;
-    }
+  const handleDownload = async (filePath, fileName) => {
     try {
+      let request = `/api/download?filePath=${filePath}`;
+
+      if (fileName) {
+        request = request + `&fileName=${fileName}`;
+      }
       const response = await fetch(request);
       if (!response.ok) {
-        throw new Error();
+        const { message } = await response.json();
+        toast.error("Erreur lors du téléchargement", {
+          description: message,
+        });
+        return;
       }
-      toast({
-        title: "Téléchargement lancé",
-        description: "Votre ressource est en cours de téléchargement.",
+      toast.success("Téléchargement lancé", {
+        description: "Votre ressource est en cours de téléchargement",
       });
+
       window.location.href = request;
     } catch {
-      toast({
-        title: "Erreur lors du téléchargement",
-        description:
-          "Impossible de récupérer la ressource. Veuillez réessayer.",
+      toast.error("Erreur lors du téléchargement", {
+        description: "Impossible de récupérer la ressource. Veuillez réessayer",
       });
     }
   };
 
-  const handleDownloadBulk = async () => {};
+  const handleDownloadBulk = async () => {
+    try {
+      const fichePaths = upload.fiches
+        .filter((fiche) => selectedItems.fiches.includes(fiche.id))
+        .map((fiche) => fiche.path);
+
+      const failedFichePaths = upload.failedFiches
+        .filter(
+          (fiche) => selectedItems.failedFiches.includes(fiche.id) && fiche.path
+        )
+        .map((fiche) => fiche.path);
+
+      const paths = [...fichePaths, ...failedFichePaths];
+      console.log(paths);
+      const query = paths
+        .map((path) => `filePath=${encodeURIComponent(path)}`)
+        .join("&");
+
+      const request = `/api/download?${query}`;
+
+      const response = await fetch(request);
+      if (!response.ok) {
+        const { message } = await response.json();
+        toast.error("Erreur lors du téléchargement", {
+          description: message,
+        });
+        return;
+      }
+      toast.success("Téléchargement lancé", {
+        description: "Votre ressources est en cours de téléchargement",
+      });
+      window.location.href = request;
+    } catch {
+      toast.error("Erreur lors du téléchargement", {
+        description:
+          "Impossible de récupérer les ressources. Veuillez réessayer",
+      });
+    }
+  };
 
   const handleDeleteFiche = async (id) => {
     const response = await fetch(`/api/fiche?id=${id}`, {
@@ -440,12 +469,7 @@ const ConsultUpload = ({ params }) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() =>
-                      handleDownload({
-                        filePath: upload.path,
-                        fileName: upload.fileName,
-                      })
-                    }
+                    onClick={() => handleDownload(upload.path, upload.fileName)}
                     className="h-7 w-7 p-0"
                   >
                     <Download className="h-4 w-4 text-gray-600" />
@@ -764,9 +788,7 @@ const ConsultUpload = ({ params }) => {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() =>
-                                      handleDownload({ filePath: fiche.path })
-                                    }
+                                    onClick={() => handleDownload(fiche.path)}
                                   >
                                     <Download className="h-4 w-4" />
                                   </Button>
@@ -861,9 +883,7 @@ const ConsultUpload = ({ params }) => {
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() =>
-                                        handleDownload({ filePath: fiche.path })
-                                      }
+                                      onClick={() => handleDownload(fiche.path)}
                                     >
                                       <Download className="h-4 w-4" />
                                     </Button>

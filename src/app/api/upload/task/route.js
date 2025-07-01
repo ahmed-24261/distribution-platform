@@ -1,58 +1,105 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
-import { getUploadByIdWithUser } from "@/lib/upload";
-import { HTTPError } from "@/lib/utils";
+import { getUploadById } from "@/lib/upload";
+import { validatePostRequest } from "./";
 import { redis } from "@/lib/redis";
 
 export const POST = async (request) => {
   try {
     const { id: userId, permissions = [] } = await getUser();
 
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          message: "Internal server error: failed to fetch userId",
+        },
+        { status: 500 }
+      );
+    }
+
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_UPLOADS");
 
-    const { id, task } = await request.json();
-
     if (!hasAllAccess && !hasOwnAccess) {
       return NextResponse.json(
-        { success: false, data: [], message: "Forbidden: no UPDATE access" },
+        { success: false, data: null, message: "Forbidden: no UPDATE access" },
         { status: 403 }
       );
     }
 
-    if (!id || !task) {
-      throw new HTTPError("Bad request: id and task required", 400);
+    const validationResult = await validatePostRequest(request);
+    if (!validationResult.valid) {
+      return NextResponse.json(
+        { success: false, data: null, message: validationResult.message },
+        { status: 400 }
+      );
     }
 
-    const upload = await getUploadByIdWithUser(id);
-    if (!upload) {
-      throw new HTTPError("Bad request: invalid id", 400);
+    const { id, task } = validationResult.output;
+
+    const getResponse = await getUploadById(id);
+    if (getResponse.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          message: "Internal server error: failed to fetch upload owner",
+        },
+        { status: 500 }
+      );
+    }
+    if (getResponse.not_found) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          message: "Not found: upload not found",
+        },
+        { status: 404 }
+      );
     }
 
-    if (!hasAllAccess && userId !== upload.user_id) {
-      throw new HTTPError("Unauthorized: insufficient permissions", 403);
+    const { status, userId: ownerId } = getResponse.data;
+
+    if (!hasAllAccess && userId !== ownerId) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          message: "Forbidden: insufficient permissions",
+        },
+        { status: 403 }
+      );
+    }
+    if (status !== "pending") {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          message: "Bad request: upload already processed",
+        },
+        { status: 400 }
+      );
     }
 
     if (task === "process") {
       await redis.rPush("uploadsToProcess", id);
-    } else {
-      throw new HTTPError("Bad request: invalid task", 400);
     }
 
     return NextResponse.json(
-      { success: true, data: id, message: "Traitement du fichier en cours..." },
+      { success: true, data: id, message: "Task started ..." },
       { status: 200 }
     );
-  } catch (error) {
-    const isHTTPError = error instanceof HTTPError;
-    const message = isHTTPError
-      ? error.getMessage()
-      : "Erreur interne du serveur";
-    const status = isHTTPError ? error.getStatus() : 500;
-
+  } catch {
     return NextResponse.json(
-      { success: false, data: null, message },
-      { status }
+      {
+        success: false,
+        data: null,
+        message: "Internal server error",
+      },
+      { status: 500 }
     );
   }
 };

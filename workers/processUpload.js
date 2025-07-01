@@ -454,7 +454,7 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
 
     const ficheQuery = `
       INSERT INTO fiche
-      (ref, source_id, date, object, summary, path, hash, upload_id, dump)
+      (ref, "sourceId", date, object, summary, path, hash, "uploadId", dump)
       values
       ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id`;
@@ -478,7 +478,7 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
     for (const docData of docsData) {
       const docQuery = `
       INSERT INTO document
-      (type, fiche_id, file_name, path, hash, content, meta, dump_info, original, message_id)
+      (type, "ficheId", "fileName", path, hash, content, meta, "dumpInfo", original, "messageId")
       values
       ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
       const {
@@ -552,7 +552,9 @@ const getUploadById = async (id) => {
 
     const { rows } = await pool.query(query, values);
     return rows[0];
-  } catch (error) {}
+  } catch (error) {
+    return null;
+  }
 };
 
 const getFicheByHash = async (hash) => {
@@ -638,13 +640,17 @@ while (true) {
 
     const outputDir = path.join(TEMP_FOLDER, id);
 
-    let { path: filePath, file_name: fileName } = upload;
+    let { path: filePath, fileName } = upload;
     filePath = path.join(FILE_STORAGE_PATH, filePath);
 
-    await processZipFile(filePath, outputDir, fileName, id).catch(async () => {
-      await updateUploadStatusById(id, "failed");
-    });
-    await updateUploadStatusById(id, "completed");
+    await processZipFile(filePath, outputDir, fileName, id)
+      .then(async () => {
+        await updateUploadStatusById(id, "completed");
+      })
+      .catch(async (e) => {
+        console.log(e);
+        await updateUploadStatusById(id, "failed");
+      });
 
     await fsp.rm(outputDir, { recursive: true, force: true });
 

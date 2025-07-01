@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
-  getUploadOwnerId,
+  getUploadById,
   getUploadsWhere,
   getUploadByHash,
   createUpload,
   deleteUpload,
 } from "@/lib/upload";
-import { validatePostData, constructPostData } from "./";
-import validate from "uuid-validate";
+import {
+  validateGetRequest,
+  validatePostRequest,
+  constructPostData,
+  validateDeleteRequest,
+} from "./";
 
 export const GET = async (request) => {
   try {
@@ -35,30 +39,24 @@ export const GET = async (request) => {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const ids = searchParams.getAll("id");
-
-    const validateIds = ids.every((id) => validate(id, 4));
-    if (!validateIds) {
+    const validationResult = validateGetRequest(request);
+    if (!validationResult.valid) {
       return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Bad request: 'id' should be a valid uuid",
-        },
+        { success: false, data: [], message: validationResult.message },
         { status: 400 }
       );
     }
+
+    const { ids } = validationResult.output;
 
     const where = {};
     if (ids.length) where.id = ids;
     if (!hasAllAccess) where.userId = userId;
 
-    const response = await getUploadsWhere(where);
-
-    if (response.ok) {
+    const getResponse = await getUploadsWhere(where);
+    if (getResponse.ok) {
       return NextResponse.json(
-        { success: true, data: response.data, message: null },
+        { success: true, data: getResponse.data, message: null },
         { status: 200 }
       );
     } else {
@@ -103,18 +101,18 @@ export const POST = async (request) => {
       );
     }
 
-    const formData = await request.formData();
-
-    const { valid, message } = await validatePostData(formData);
-    if (!valid) {
+    const validationResult = await validatePostRequest(request);
+    if (!validationResult.valid) {
       return NextResponse.json(
-        { success: false, data: null, message },
+        { success: false, data: null, message: validationResult.message },
         { status: 400 }
       );
     }
 
-    const result = await constructPostData(formData, userId);
-    if (!result) {
+    const { formData } = validationResult.output;
+
+    const constructionResult = await constructPostData(formData, userId);
+    if (!constructionResult) {
       return NextResponse.json(
         {
           success: false,
@@ -125,10 +123,10 @@ export const POST = async (request) => {
       );
     }
 
-    const { uploadData, fileData } = result;
+    const { uploadData, fileData } = constructionResult;
 
-    const response = await getUploadByHash(uploadData.hash);
-    if (response.ok) {
+    const getResponse = await getUploadByHash(uploadData.hash);
+    if (getResponse.ok) {
       return NextResponse.json(
         {
           success: false,
@@ -137,7 +135,7 @@ export const POST = async (request) => {
         },
         { status: 403 }
       );
-    } else if (response.error) {
+    } else if (getResponse.error) {
       return NextResponse.json(
         {
           success: false,
@@ -149,7 +147,6 @@ export const POST = async (request) => {
     }
 
     const createResponse = await createUpload(uploadData, fileData);
-
     if (createResponse.error) {
       return NextResponse.json(
         {
@@ -169,7 +166,7 @@ export const POST = async (request) => {
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         success: false,
@@ -206,44 +203,27 @@ export const DELETE = async (request) => {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-
-    const validateId = validate(id, 4);
-    if (!validateId) {
+    const validationResult = await validateDeleteRequest(request);
+    if (!validationResult.valid) {
       return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Bad request: 'id' should be a valid uuid",
-        },
+        { success: false, data: null, message: validationResult.message },
         { status: 400 }
       );
     }
+    const { id } = validationResult.output;
 
-    if (!id) {
+    const getResponse = await getUploadById(id);
+    if (getResponse.error) {
       return NextResponse.json(
         {
           success: false,
           data: null,
-          message: "Bad request: 'id' required",
-        },
-        { status: 400 }
-      );
-    }
-
-    const response = await getUploadOwnerId(id);
-    if (response.error) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Internal server error: failed to fetch upload owner",
+          message: "Internal server error: failed to fetch upload",
         },
         { status: 500 }
       );
     }
-    if (response.not_found) {
+    if (getResponse.not_found) {
       return NextResponse.json(
         {
           success: false,
@@ -254,7 +234,7 @@ export const DELETE = async (request) => {
       );
     }
 
-    const { ownerId } = response;
+    const { userId: ownerId } = getResponse.data;
     if (!hasAllAccess && userId !== ownerId) {
       return NextResponse.json(
         {
