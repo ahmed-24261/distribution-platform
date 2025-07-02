@@ -20,7 +20,8 @@ CREATE TYPE fiche_status AS ENUM ('valid', 'suspended', 'canceled');
 CREATE TYPE document_type AS ENUM ('File', 'Message');
 
 -- Drop tables
-DROP TABLE IF EXISTS "failedFiche",
+DROP TABLE IF EXISTS observations,
+"failedFiche",
 "groupSource",
 document,
 fiche,
@@ -144,4 +145,11 @@ CREATE TABLE
 		hash VARCHAR(64) UNIQUE,
 		"uploadId" UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,
 		dump TEXT
+	);
+
+CREATE TABLE
+	observations (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
+		"ficheId" UUID REFERENCES fiche (id) ON DELETE CASCADE,
+		observation UUID REFERENCES fiche (id) ON DELETE CASCADE
 	);

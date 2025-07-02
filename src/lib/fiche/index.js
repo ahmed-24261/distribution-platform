@@ -4,28 +4,109 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getFicheOwnerId = async (id) => {
+export const getFiches = async (ids = [], userId) => {
   try {
     const query = `
-        SELECT u.user_id as "ownerId"
+      SELECT 
+        f.id,
+        f.ref,
+        f."sourceId",
+        s.name AS source,
+        f.date,
+        f.object,
+        f.summary,
+        f.status,
+        f.path,
+        f.hash,
+        f.dump,
+        (
+          SELECT COALESCE(
+            JSON_AGG(
+              jsonb_build_object(
+                'id', d.id,
+                'type', d.type,
+                'fileName', d."fileName",
+                'path', d.path,
+                'hash', d.hash,
+                'meta', d.meta,
+                'ficheId', d."ficheId" 
+              )
+              ORDER BY d."fileName"
+            ),
+            '[]'
+          )
+          FROM document d
+          LEFT JOIN fiche ON d."ficheId" = fiche.id
+          WHERE fiche.id = f.id
+        ) AS documents,
+
+        (
+          SELECT COALESCE(
+            JSON_AGG(
+              jsonb_build_object(
+                'id', f1.id,
+                'ref', f1.ref,
+                'object', f1.object,
+                'summary', f1.summary,
+                'createdBy', f1."createdBy",
+                'status', f1.status,
+                'date', f1.date,
+                'path', f1.path,
+                'hash', f1.hash
+              )
+              ORDER BY f1.id
+            ),
+            '[]'
+          )
+          FROM fiche f1
+          LEFT JOIN observations o ON o.observation = f1.id
+          LEFT JOIN fiche f2 ON o."ficheId" = f2.id
+          WHERE f2.id = f.id
+        ) AS observations
+
+      FROM fiche f
+      JOIN "groupSource" gs ON f."sourceId" = gs."sourceId"
+      JOIN "user" u ON gs."groupId" = u."groupId"
+      JOIN source s ON s.id = f."sourceId"
+      LEFT JOIN document d ON d."ficheId" = f.id
+      WHERE u.id = $1
+      ${ids.length ? "AND f.id = ANY($2::UUID[])" : ""}
+      GROUP BY f.id, s.name
+      ORDER BY f.date DESC;
+    `;
+
+    const values = ids.length ? [userId, ids] : [userId];
+
+    const { rows } = await pool.query(query, values);
+
+    return { ok: true, data: rows };
+  } catch (e) {
+    console.log(e);
+    return { error: false };
+  }
+};
+
+export const getFiche = async (id) => {
+  try {
+    const query = `
+        SELECT f.*, u.*
         FROM fiche f
-        JOIN upload u ON f.upload_id = u.id
+        JOIN upload u ON f."uploadId" = u.id
         WHERE f.id = $1;
         `;
     const values = [id];
 
     const { rows, rowCount } = await pool.query(query, values);
 
-    if (!rowCount) return null;
+    if (!rowCount) return { not_found: true };
 
-    const { ownerId } = rows[0];
-    return ownerId;
+    return { ok: true, data: rows[0] };
   } catch {
-    return null;
+    return { error: true };
   }
 };
 
-export const updateFicheById = async (id, update) => {
+export const updateFiche = async (id, update) => {
   try {
     const keys = Object.keys(update);
     if (keys.length === 0) return false;
@@ -44,13 +125,13 @@ export const updateFicheById = async (id, update) => {
 
     if (!rowCount) return null;
 
-    return id;
-  } catch (error) {
-    return null;
+    return { ok: true, data: id };
+  } catch {
+    return { error: true };
   }
 };
 
-export const deleteFicheById = async (id) => {
+export const deleteFiche = async (id) => {
   const client = await pool.connect();
 
   try {
@@ -77,10 +158,10 @@ export const deleteFicheById = async (id) => {
 
     await client.query("COMMIT");
     client.release();
-    return id;
+    return { ok: true, data: id };
   } catch {
     await client.query("ROLLBACK");
     client.release();
-    return null;
+    return { error: true };
   }
 };

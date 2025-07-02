@@ -21,6 +21,59 @@ async function seed() {
     const resetQueries = `TRUNCATE TABLE "failedFiche", "groupSource", document, fiche, source, upload, "userPermission", permission, "user", "group" CASCADE;`;
     await pool.query(resetQueries);
 
+    // insert sources
+    const sources = [
+      { name: "books", description: "books source" },
+      { name: "fruits", description: "fruits source" },
+      { name: "locations", description: "locations source" },
+    ];
+    const sourceQueries = `INSERT INTO source (name, description) VALUES ${sources
+      .map((resource) => `('${resource.name}', '${resource.description}')`)
+      .join(", ")} RETURNING id;`;
+
+    const sourceRes = await pool.query(sourceQueries);
+    const sourceIds = sourceRes.rows.map((row) => row.id);
+    if (sourceIds.length !== sources.length) {
+      throw new Error("some sources were not inserted");
+    }
+
+    const [source1, source2, source3] = sourceIds;
+
+    // insert groups
+    const groups = [
+      { name: "group-books", description: "group for books" },
+      { name: "group-fruits", description: "group for fruits" },
+      { name: "group-all", description: "group for all" },
+    ];
+    const groupQueries = `INSERT INTO "group" (name, description) VALUES ${groups
+      .map((resource) => `('${resource.name}', '${resource.description}')`)
+      .join(", ")} RETURNING id;`;
+
+    const groupRes = await pool.query(groupQueries);
+    const groupIds = groupRes.rows.map((row) => row.id);
+    if (groupIds.length !== groups.length) {
+      throw new Error("some groups were not inserted");
+    }
+
+    const [group1, group2, group3] = groupIds;
+
+    // insert group_source
+    const groupSource = [
+      { groupId: group1, sourceId: source1 },
+
+      { groupId: group2, sourceId: source2 },
+
+      { groupId: group3, sourceId: source1 },
+      { groupId: group3, sourceId: source2 },
+      { groupId: group3, sourceId: source3 },
+    ];
+
+    const groupSourceQueries = `INSERT INTO "groupSource" ("groupId", "sourceId") VALUES ${groupSource
+      .map((gs) => `('${gs.groupId}', '${gs.sourceId}')`)
+      .join(", ")} RETURNING *;`;
+
+    const groupSourceRes = await pool.query(groupSourceQueries);
+
     // Insert permissions
     const permissions = [
       { name: "CAN_CREATE_UPLOAD", description: "can create upload" },
@@ -39,6 +92,7 @@ async function seed() {
         name: "CAN_DOWNLOAD_OWN_UPLOADS",
         description: "can download own uploads",
       },
+      { name: "CAN_GET_FICHES", description: "can get fiches" },
 
       { name: "CAN_UPDATE_ALL_FICHES", description: "can update all fiches" },
       { name: "CAN_UPDATE_OWN_FICHES", description: "can update own fiches" },
@@ -74,6 +128,7 @@ async function seed() {
       canDeleteOwnUploads,
       canDownloadAllUploads,
       canDownloadOwnUploads,
+      canGetFiches,
       canUpdateAllFiches,
       canUpdateOwnFiches,
       canDeleteAllFiches,
@@ -82,8 +137,8 @@ async function seed() {
       canDownloadOwnFiches,
     ] = permissionIds;
 
-    // Insert users
-    const users = [
+    // Insert admins
+    const admins = [
       {
         username: "superAdmin",
         password: "SuperAdminPass1!",
@@ -93,19 +148,70 @@ async function seed() {
       { username: "admin2", password: "AdminPass2!", role: "admin" },
       { username: "admin3", password: "AdminPass3!", role: "admin" },
       { username: "admin4", password: "AdminPass4!", role: "admin" },
-      { username: "user1", password: "UserPass1!", role: "user" },
-      { username: "user2", password: "UserPass2!", role: "user" },
-      { username: "user3", password: "UserPass3!", role: "user" },
-      { username: "user4", password: "UserPass4!", role: "user" },
-      { username: "user5", password: "UserPass5!", role: "user" },
     ];
 
-    const userQueries = `INSERT INTO "user" (username, password, role) VALUES ${users
+    const adminQueries = `INSERT INTO "user" (username, password, role) VALUES ${admins
       .map(
         (resource) =>
           `('${resource.username}', '${hashFunction(resource.password)}', '${
             resource.role
           }')`
+      )
+      .join(", ")} RETURNING id;`;
+
+    const adminRes = await pool.query(adminQueries);
+    const adminIds = adminRes.rows.map((row) => row.id);
+    if (adminIds.length !== admins.length) {
+      throw new Error("some users were not inserted");
+    }
+
+    const [superAdmin, admin1, admin2, admin3, admin4] = adminIds;
+
+    consoleLog("admin 1:\n" + admin1, "green");
+    consoleLog("admin 2:\n" + admin2, "green");
+    consoleLog("admin 3:\n" + admin3, "green");
+    consoleLog("admin 4:\n" + admin4, "green");
+
+    // Insert admins
+    const users = [
+      {
+        username: "user1",
+        password: "UserPass1!",
+        role: "user",
+        groupId: group1,
+      },
+      {
+        username: "user2",
+        password: "UserPass2!",
+        role: "user",
+        groupId: group2,
+      },
+      {
+        username: "user3",
+        password: "UserPass3!",
+        role: "user",
+        groupId: group3,
+      },
+      {
+        username: "user4",
+        password: "UserPass4!",
+        role: "user",
+        groupId: group3,
+      },
+      {
+        username: "user5",
+        password: "UserPass5!",
+        role: "user",
+        groupId: group3,
+      },
+    ];
+
+    const userQueries = `INSERT INTO "user" (username, password, role, "groupId") VALUES ${users
+      .map(
+        (resource) =>
+          `('${resource.username}', '${hashFunction(resource.password)}', '${
+            resource.role
+          }', '${resource.groupId}')`
       )
       .join(", ")} RETURNING id;`;
 
@@ -115,23 +221,14 @@ async function seed() {
       throw new Error("some users were not inserted");
     }
 
-    const [
-      superAdmin,
-      admin1,
-      admin2,
-      admin3,
-      admin4,
-      user1,
-      user2,
-      user3,
-      user4,
-      user5,
-    ] = userIds;
+    const [user1, user2, user3, user4, user5] = userIds;
 
-    consoleLog("admin 1:\n" + admin1, "green");
-    consoleLog("admin 2:\n" + admin2, "green");
-    consoleLog("admin 3:\n" + admin3, "green");
-    consoleLog("admin 4:\n" + admin4, "green");
+    console.log("-----------------");
+    consoleLog("user 1:\n" + user1, "green");
+    consoleLog("user 2:\n" + user2, "green");
+    consoleLog("user 3:\n" + user3, "green");
+    consoleLog("user 4:\n" + user4, "green");
+    consoleLog("user 5:\n" + user5, "green");
 
     // Insert users_permissions
     const userPermission = [
@@ -154,6 +251,7 @@ async function seed() {
       { userId: admin1, permissionId: canUpdateOwnUpload },
       { userId: admin1, permissionId: canDeleteAllUploads },
       { userId: admin1, permissionId: canDownloadAllUploads },
+      { userId: admin1, permissionId: canGetFiches },
 
       { userId: admin1, permissionId: canDeleteAllFiches },
       { userId: admin1, permissionId: canDeleteOwnFiches },
@@ -179,6 +277,12 @@ async function seed() {
 
       { userId: admin4, permissionId: canCreateUpload },
       { userId: admin4, permissionId: canGetAllUploads },
+
+      { userId: user1, permissionId: canGetFiches },
+      { userId: user2, permissionId: canGetFiches },
+      { userId: user3, permissionId: canGetFiches },
+      { userId: user4, permissionId: canGetFiches },
+      { userId: user5, permissionId: canGetFiches },
     ];
 
     const userPermissionQueries = `INSERT INTO "userPermission" ("userId", "permissionId") VALUES ${userPermission
@@ -249,59 +353,6 @@ async function seed() {
     //   throw new Error("some uploads were not inserted");
     // }
     // const [upload1, upload2, upload3, upload4, upload5] = uploadIds;
-
-    // insert sources
-    const sources = [
-      { name: "books", description: "books source" },
-      { name: "fruits", description: "fruits source" },
-      { name: "locations", description: "locations source" },
-    ];
-    const sourceQueries = `INSERT INTO source (name, description) VALUES ${sources
-      .map((resource) => `('${resource.name}', '${resource.description}')`)
-      .join(", ")} RETURNING id;`;
-
-    const sourceRes = await pool.query(sourceQueries);
-    const sourceIds = sourceRes.rows.map((row) => row.id);
-    if (sourceIds.length !== sources.length) {
-      throw new Error("some sources were not inserted");
-    }
-
-    const [source1, source2, source3] = sourceIds;
-
-    // insert groups
-    const groups = [
-      { name: "group-books", description: "group for books" },
-      { name: "group-fruits", description: "group for fruits" },
-      { name: "group-all", description: "group for all" },
-    ];
-    const groupQueries = `INSERT INTO "group" (name, description) VALUES ${groups
-      .map((resource) => `('${resource.name}', '${resource.description}')`)
-      .join(", ")} RETURNING id;`;
-
-    const groupRes = await pool.query(groupQueries);
-    const groupIds = groupRes.rows.map((row) => row.id);
-    if (groupIds.length !== groups.length) {
-      throw new Error("some groups were not inserted");
-    }
-
-    const [group1, group2, group3] = groupIds;
-
-    // insert group_source
-    const groupSource = [
-      { groupId: group1, sourceId: source1 },
-
-      { groupId: group2, sourceId: source2 },
-
-      { groupId: group3, sourceId: source1 },
-      { groupId: group3, sourceId: source2 },
-      { groupId: group3, sourceId: source3 },
-    ];
-
-    const groupSourceQueries = `INSERT INTO "groupSource" ("groupId", "sourceId") VALUES ${groupSource
-      .map((gs) => `('${gs.groupId}', '${gs.sourceId}')`)
-      .join(", ")} RETURNING *;`;
-
-    const groupSourceRes = await pool.query(groupSourceQueries);
 
     consoleLog("✅ Seed complete.", "green");
   } catch (error) {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-const SidebarSection = ({
+const SectionTemplate = ({
   title,
   icon: Icon,
   children,
@@ -34,4 +34,4 @@ const SidebarSection = ({
   );
 };
 
-export default SidebarSection;
+export default SectionTemplate;

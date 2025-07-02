@@ -1,73 +1,26 @@
-import { FileText } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import PDFViewer from "./PDFViewer";
-import DOCXViewer from "./DOCXViewer";
 import DocumentActions from "./DocumentActions";
 import EmptyViewer from "./EmptyViewer";
-import ExtensionNotSupportedViewer from "./ExtensionNotSupportedViewer";
+import RenderTitle from "./RenderTitle";
+import RenderViewer from "./RenderViewer";
 
 const DocumentViewer = ({ document, withNavigate = false }) => {
   if (!document) return <EmptyViewer />;
 
-  const withDownloadForFicheOnly = document.docType === "fiche";
-  const withPrintForFicheOnly = document.docType === "fiche";
-  const withDownload = document.docType !== "fiche";
-  const withConsult = document.docType === "observation";
-
-  const extension = document.extension;
-
-  const renderTitle = (documentName, documentType) => {
-    switch (documentType) {
-      case "fiche":
-        return (
-          <>
-            <FileText size={16} className="mr-2 text-muted-foreground" />
-            <span className="font-semibold">Fiche</span>: {documentName}
-          </>
-        );
-      case "source":
-        return (
-          <>
-            <FileText size={16} className="mr-2 text-muted-foreground" />
-            <span className="font-semibold">Source</span>: {documentName}
-          </>
-        );
-      case "observation":
-        return (
-          <>
-            <FileText size={16} className="mr-2 text-muted-foreground" />
-            <span className="font-semibold">Observation</span>: {documentName}
-          </>
-        );
-      default:
-        return (
-          <>
-            <FileText size={16} className="mr-2 text-muted-foreground" />
-            <span className="font-semibold">Inconnue</span>: {documentName}
-          </>
-        );
-    }
-  };
-
-  const renderViewer = (extension) => {
-    switch (extension) {
-      case ".pdf":
-        return <PDFViewer path={document.path} />;
-      case ".docx":
-        return <DOCXViewer path={document.path} />;
-      case ".xlsx":
-        break;
-      default:
-        return <ExtensionNotSupportedViewer />;
-    }
-  };
+  const withDownloadForFicheOnly = document.type === "fiche";
+  const withPrintForFicheOnly = document.type === "fiche";
+  const withDownload = document.type !== "fiche";
+  const withConsult = document.type === "observation";
 
   return (
     <div className="h-full w-full">
-      <Card className="h-full shadow-sm">
-        <CardHeader className="py-2 px-4 bg-accent rounded-t-lg border-b flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-sm font-medium flex items-center">
-            {renderTitle(document.name, document.docType)}
+      <Card className="p-0 h-full shadow-sm">
+        <CardHeader className="px-4 h-12 bg-accent rounded-t-lg flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-sm font-normal flex items-center">
+            <RenderTitle
+              displayName={document.displayName}
+              type={document.type}
+            />
           </CardTitle>
           <DocumentActions
             document={document}
@@ -78,8 +31,8 @@ const DocumentViewer = ({ document, withNavigate = false }) => {
             withConsult={withConsult}
           />
         </CardHeader>
-        <CardContent className="p-0 h-[calc(100%-40px)]">
-          {renderViewer(extension)}
+        <CardContent className="p-0 flex-1">
+          <RenderViewer path={document?.path} />
         </CardContent>
       </Card>
     </div>

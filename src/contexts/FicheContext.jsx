@@ -3,15 +3,13 @@ import { createContext, useContext, useState, useEffect } from "react";
 
 const FicheContext = createContext(null);
 
-export const FicheProvider = ({
-  children,
-  fiche,
-  sourceDocuments,
-  observations,
-  namedEntities,
-}) => {
+export const FicheProvider = ({ children, fiche }) => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [entireMode, setEntireMode] = useState(false);
+
+  const sourceDocuments = fiche?.documents || [];
+  const observations = fiche?.observations || [];
+  const namedEntities = [];
 
   useEffect(() => {
     handleDocumentClick(sourceDocuments[0] || observations[0] || null);
@@ -38,13 +36,13 @@ export const FicheProvider = ({
   };
 
   const navigatePrevious = (document) => {
-    const docType = document?.docType;
-    if (docType === "source") {
+    const type = document?.type;
+    if (type === "source") {
       const index = sourceDocuments.findIndex((doc) => doc.id === document.id);
       if (index > 0) {
         setSelectedDoc(sourceDocuments[index - 1]);
       } else if (index === 0 && entireMode) setSelectedDoc(fiche);
-    } else if (docType === "observation") {
+    } else if (type === "observation") {
       const index = observations.findIndex((obs) => obs.id === document.id);
       if (index > 0) {
         setSelectedDoc(observations[index - 1]);
@@ -53,14 +51,14 @@ export const FicheProvider = ({
   };
 
   const navigateNext = (document) => {
-    const docType = document?.docType;
-    if (docType === "fiche" && entireMode) setSelectedDoc(sourceDocuments[0]);
-    else if (docType === "source") {
+    const type = document?.type;
+    if (type === "fiche" && entireMode) setSelectedDoc(sourceDocuments[0]);
+    else if (type === "source") {
       const index = sourceDocuments.findIndex((doc) => doc.id === document.id);
       if (index < sourceDocuments.length - 1) {
         setSelectedDoc(sourceDocuments[index + 1]);
       }
-    } else if (docType === "observation") {
+    } else if (type === "observation") {
       const index = observations.findIndex((obs) => obs.id === document.id);
       if (index < observations.length - 1) {
         setSelectedDoc(observations[index + 1]);

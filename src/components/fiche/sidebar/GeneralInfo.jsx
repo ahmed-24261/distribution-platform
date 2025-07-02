@@ -1,11 +1,11 @@
 import { Info } from "lucide-react";
-import SidebarSection from "./SidebarSection";
+import SectionTemplate from "./SectionTemplate";
 import { useFiche } from "@/contexts/FicheContext";
 
 const GeneralInfo = () => {
   const { fiche } = useFiche();
   return (
-    <SidebarSection title="Informations Générales" icon={Info} defaultOpen>
+    <SectionTemplate title="Informations Générales" icon={Info} defaultOpen>
       <div className="space-y-2">
         <div>
           <div className="text-xs text-muted-foreground">Référence</div>
@@ -17,10 +17,10 @@ const GeneralInfo = () => {
         </div>
         <div>
           <div className="text-xs text-muted-foreground">Créé Par</div>
-          <div>{fiche.createdBy}</div>
+          <div>{fiche.createdBy || "Inconnu"}</div>
         </div>
       </div>
-    </SidebarSection>
+    </SectionTemplate>
   );
 };
 

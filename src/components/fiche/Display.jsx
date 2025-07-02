@@ -4,12 +4,27 @@ import DocumentViewer from "@/components/fiche/display/DocumentViewer";
 
 const Display = () => {
   const { fiche, selectedDoc, entireMode } = useFiche();
+
+  const fullDisplayFicheName = fiche?.object;
+  const displayFicheName = fullDisplayFicheName?.slice(0, 40);
+  const useToolTip = fullDisplayFicheName !== displayFicheName;
+
+  const ficheDoc = {
+    id: fiche?.id,
+    path: fiche?.path,
+    hash: fiche?.hash,
+    fullDisplayName: fullDisplayFicheName,
+    displayName: displayFicheName,
+    useToolTip,
+    type: "fiche",
+  };
+
   return !entireMode ? (
     <div className="flex-1 flex overflow-hidden">
       <div className="w-3/5 flex flex-col p-4 overflow-hidden bg-muted/20">
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 min-h-0">
-            <DocumentViewer document={fiche} />
+            <DocumentViewer document={ficheDoc} />
           </div>
         </div>
       </div>

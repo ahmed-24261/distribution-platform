@@ -1,7 +1,7 @@
 import path from "path";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
-import { countUploadsWhereDisplayNameLike, getUploadById } from "@/lib/upload";
+import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
 import validate from "uuid-validate";
 
 // --- GET request

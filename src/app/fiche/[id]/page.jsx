@@ -15,7 +15,8 @@ const Fiche = ({ params }) => {
       const response = await fetch(`/api/fiche?id=${id}`);
       const { success, data, message } = await response.json();
       if (success) {
-        setFiche(data);
+        console.log(data);
+        setFiche(data[0]);
       } else {
         alert("GET api/fiche: " + message);
       }
@@ -32,12 +33,7 @@ const Fiche = ({ params }) => {
 
   return (
     <Loading>
-      <FicheProvider
-        fiche={fiche}
-        sourceDocuments={sourceDocuments}
-        observations={observations}
-        namedEntities={namedEntities}
-      >
+      <FicheProvider fiche={fiche}>
         <div className="flex flex-1 overflow-hidden">
           <div className="w-1/5 flex-shrink-0 border-r overflow-auto bg-gray-50">
             <Sidebar />

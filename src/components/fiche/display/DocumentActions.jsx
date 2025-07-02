@@ -14,7 +14,7 @@ const DocumentActions = ({
   withConsult,
 }) => {
   return (
-    <div className="flex items-center space-x-1">
+    <div className="flex-none flex items-center space-x-1">
       <DownloadForFicheOnly
         withDownloadForFicheOnly={withDownloadForFicheOnly}
       />

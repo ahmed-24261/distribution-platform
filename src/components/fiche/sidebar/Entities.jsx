@@ -1,5 +1,5 @@
 import { Users, Building, MapPin, ShieldQuestion } from "lucide-react";
-import SidebarSection from "./SidebarSection";
+import SectionTemplate from "./SectionTemplate";
 import { useState, useCallback } from "react";
 import { useFiche } from "@/contexts/FicheContext";
 
@@ -75,7 +75,7 @@ const Entities = () => {
 
   if (!Object.keys(groupedEntities).length) return;
   return (
-    <SidebarSection
+    <SectionTemplate
       title="Entités Nommées"
       icon={Users}
       onToggle={handleSectionToggle}
@@ -104,7 +104,7 @@ const Entities = () => {
           </div>
         </div>
       ))}
-    </SidebarSection>
+    </SectionTemplate>
   );
 };
 
