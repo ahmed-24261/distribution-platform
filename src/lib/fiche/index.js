@@ -4,20 +4,16 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getFiches = async (ids = [], userId) => {
-  try {
-    const query = `
+export const getFicheWithDocsAndObsByIdAndUserId = async (id, userId) => {
+  const query = `
       SELECT 
         f.id,
         f.ref,
-        f."sourceId",
         s.name AS source,
         f.date,
         f.object,
         f.summary,
-        f.status,
-        f.path,
-        f.hash,
+        f."createdBy",
         f.dump,
         (
           SELECT COALESCE(
@@ -26,10 +22,6 @@ export const getFiches = async (ids = [], userId) => {
                 'id', d.id,
                 'type', d.type,
                 'fileName', d."fileName",
-                'path', d.path,
-                'hash', d.hash,
-                'meta', d.meta,
-                'ficheId', d."ficheId" 
               )
               ORDER BY d."fileName"
             ),
@@ -39,7 +31,6 @@ export const getFiches = async (ids = [], userId) => {
           LEFT JOIN fiche ON d."ficheId" = fiche.id
           WHERE fiche.id = f.id
         ) AS documents,
-
         (
           SELECT COALESCE(
             JSON_AGG(
@@ -51,8 +42,6 @@ export const getFiches = async (ids = [], userId) => {
                 'createdBy', f1."createdBy",
                 'status', f1.status,
                 'date', f1.date,
-                'path', f1.path,
-                'hash', f1.hash
               )
               ORDER BY f1.id
             ),
@@ -68,22 +57,29 @@ export const getFiches = async (ids = [], userId) => {
       JOIN "groupSource" gs ON f."sourceId" = gs."sourceId"
       JOIN "user" u ON gs."groupId" = u."groupId"
       JOIN source s ON s.id = f."sourceId"
-      LEFT JOIN document d ON d."ficheId" = f.id
-      WHERE u.id = $1
-      ${ids.length ? "AND f.id = ANY($2::UUID[])" : ""}
+      JOIN document d ON d."ficheId" = f.id
+
+      WHERE f.id = $1 AND f.status = 'valid' AND u.id = $2
       GROUP BY f.id, s.name
       ORDER BY f.date DESC;
     `;
+  const values = [id, userId];
 
-    const values = ids.length ? [userId, ids] : [userId];
+  const { rows } = await pool.query(query, values);
 
-    const { rows } = await pool.query(query, values);
+  return { ok: true, data: rows };
+};
 
-    return { ok: true, data: rows };
-  } catch (e) {
-    console.log(e);
-    return { error: false };
-  }
+export const getFichePathById = async (id) => {
+  const query = `SELECT path FROM fiche WHERE id = $1`;
+  const values = [id];
+
+  const { rows, rowCount } = await pool.query(query, values);
+
+  if (!rowCount) return null;
+
+  const { path } = rows[0];
+  return path;
 };
 
 export const getFiche = async (id) => {

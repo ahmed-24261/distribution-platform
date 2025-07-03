@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
-import { getFiche, getFiches, updateFiche, deleteFiche } from "@/lib/fiche";
+import {
+  getFiche,
+  getFichesWithDocumentsAndObservations,
+  updateFiche,
+  deleteFiche,
+} from "@/lib/fiche";
 import {
   validateGetRequest,
   validatePutRequest,
@@ -10,7 +15,8 @@ import {
 export const GET = async (request) => {
   try {
     // Get user
-    const { id: userId, permissions = [] } = await getUser();
+    const { id: userId, role, permissions = [] } = await getUser();
+    const isAdmin = ["admin", "superAdmin"].includes(role);
     if (!userId) {
       return NextResponse.json(
         {
@@ -39,15 +45,13 @@ export const GET = async (request) => {
       );
     }
 
-    const { ids } = validationResult.data;
-
-    const getResponse = await getFiches(ids, userId);
-    if (getResponse.ok) {
-      return NextResponse.json(
-        { success: true, data: getResponse.data, message: null },
-        { status: 200 }
-      );
-    } else {
+    const { ids, getFile } = validationResult.data;
+    const getResponse = await getFichesWithDocumentsAndObservations(
+      ids,
+      userId,
+      { isAdmin }
+    );
+    if (!getResponse.ok) {
       return NextResponse.json(
         {
           success: false,
@@ -57,7 +61,18 @@ export const GET = async (request) => {
         { status: 500 }
       );
     }
-  } catch {
+
+    if (!getFile) {
+      return NextResponse.json(
+        { success: true, data: getResponse.data, message: null },
+        { status: 200 }
+      );
+    }
+    const fiche = getResponse.data[0];
+    if (fiche) {
+    }
+  } catch (error) {
+    console.log(error);
     return NextResponse.json(
       { success: false, data: [], message: "Internal Server Error" },
       { status: 500 }

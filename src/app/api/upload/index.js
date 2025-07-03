@@ -1,24 +1,90 @@
+import fs from "fs";
 import path from "path";
+import JSZip from "jszip";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
-import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
 import validate from "uuid-validate";
+import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
+
+const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
 // --- GET request
 export const validateGetRequest = (request) => {
   const { searchParams } = new URL(request.url);
 
   const ids = searchParams.getAll("id");
+  const download = searchParams.get("download");
 
-  const validateIds = ids.every((id) => validate(id, 4));
-  if (!validateIds) {
+  const validatedIds = ids.every((id) => validate(id, 4));
+  if (!validatedIds) {
     return {
-      valid: false,
+      success: false,
+      data: [],
       message: "Bad request: 'id' should be a valid uuid",
     };
   }
 
-  return { valid: true, output: { ids } };
+  if (download !== null && download !== "true") {
+    return {
+      success: false,
+      data: [],
+      message: "Bad request: 'download' should be set with true or unset",
+    };
+  }
+  return { success: true, data: { ids, download } };
+};
+
+export const createFileBuffer = async (filePaths) => {
+  if (filePaths.length === 0) {
+    return NextResponse.json(
+      {
+        data: null,
+        message: "Bad request: 'filePath' required",
+      },
+      { status: 400 }
+    );
+  }
+
+  const zip = new JSZip();
+
+  if (filePaths.length === 1) {
+    const filePath = filePaths[0];
+    const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+
+    if (!fs.existsSync(absFilePath)) {
+      return {
+        success: false,
+        data: null,
+        message: "Not found: file not found",
+        status: 404,
+      };
+    }
+
+    const fileBuffer = fs.readFileSync(absFilePath);
+    const fileName = path.basename(absFilePath);
+  } else {
+    // Multiple files → ZIP
+    for (const filePath of filePaths) {
+      const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+      if (!fs.existsSync(absFilePath)) continue;
+      const fileData = fs.readFileSync(absFilePath);
+      const fileName = path.basename(absFilePath);
+      zip.file(fileName, fileData);
+    }
+
+    const zipContent = await zip.generateAsync({ type: "nodebuffer" });
+
+    const zipName = fileNameParam || "download.zip";
+
+    return new NextResponse(zipContent, {
+      headers: {
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(
+          zipName
+        )}"`,
+        "Content-Type": "application/zip",
+      },
+    });
+  }
 };
 
 // --- Post request

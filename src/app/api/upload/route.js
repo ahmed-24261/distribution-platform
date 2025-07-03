@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
-  getUploadById,
   getUploadsWhere,
+  getUploadPathsWhere,
   getUploadByHash,
   createUpload,
   deleteUpload,
@@ -13,61 +13,101 @@ import {
   constructPostData,
   validateDeleteRequest,
 } from "./";
+import path from "path";
 
 export const GET = async (request) => {
   try {
-    const { id: userId, permissions = [] } = await getUser();
+    // Get user
+    const { id: userId = null, permissions = [] } = await getUser();
 
-    if (!userId) {
+    // Check permissions
+    const hasAllGetAccess = permissions.includes("CAN_GET_ALL_UPLOADS");
+    const hasOwnGetAccess = permissions.includes("CAN_GET_OWN_UPLOADS");
+    const hasDownloadAccess = permissions.includes("CAN_DOWNLOAD_UPLOADS");
+    if (!hasAllGetAccess && !hasOwnGetAccess) {
       return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Internal server error: failed to fetch userId",
-        },
-        { status: 500 }
-      );
-    }
-
-    const hasAllAccess = permissions.includes("CAN_GET_ALL_UPLOADS");
-    const hasOwnAccess = permissions.includes("CAN_GET_OWN_UPLOADS");
-
-    if (!hasAllAccess && !hasOwnAccess) {
-      return NextResponse.json(
-        { success: false, data: [], message: "Forbidden: no GET access" },
+        { success: false, data: [], message: "Forbidden: no Get access" },
         { status: 403 }
       );
     }
 
-    const validationResult = validateGetRequest(request);
-    if (!validationResult.valid) {
-      return NextResponse.json(
-        { success: false, data: [], message: validationResult.message },
-        { status: 400 }
-      );
+    // Validate request
+    const { success, data, message } = validateGetRequest(request);
+    if (!success) {
+      return NextResponse.json({ success, data, message }, { status: 400 });
     }
 
-    const { ids } = validationResult.output;
+    // Get data
+    const { ids, download } = data;
 
     const where = {};
     if (ids.length) where.id = ids;
-    if (!hasAllAccess) where.userId = userId;
+    if (!hasAllGetAccess) where.user_id = userId;
 
-    const getResponse = await getUploadsWhere(where);
-    if (getResponse.ok) {
+    if (!download) {
+      const uploads = await getUploadsWhere(where);
       return NextResponse.json(
-        { success: true, data: getResponse.data, message: null },
+        { success: true, data: uploads, message: null },
         { status: 200 }
       );
-    } else {
+    }
+
+    if (!hasDownloadAccess) {
       return NextResponse.json(
         {
           success: false,
           data: [],
-          message: "Internal server error: failed to fetch uploads",
+          message: "Forbidden: no Download access",
         },
-        { status: 500 }
+        { status: 403 }
       );
+    }
+
+    const uploadPaths = await getUploadPathsWhere(where);
+
+    if (uploadPaths.length === 1) {
+      const uploadPath = uploadPaths[0];
+      const absPath = path.join(FILE_STORAGE_PATH, uploadPath);
+
+      if (!fs.existsSync(absPath)) {
+        return NextResponse.json(
+          { data: null, message: "Not found: file not found" },
+          { status: 404 }
+        );
+      }
+
+      const fileBuffer = fs.readFileSync(absPath);
+      const fileName = fileNameParam || path.basename(absPath);
+
+      return new NextResponse(fileBuffer, {
+        headers: {
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(
+            fileName
+          )}"`,
+          "Content-Type": "application/octet-stream",
+        },
+      });
+    } else {
+      for (const filePath of filePaths) {
+        const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+        if (!fs.existsSync(absFilePath)) continue;
+        const fileData = fs.readFileSync(absFilePath);
+        const fileName = path.basename(absFilePath);
+        zip.file(fileName, fileData);
+      }
+
+      const zipContent = await zip.generateAsync({ type: "nodebuffer" });
+
+      const zipName = fileNameParam || "download.zip";
+
+      return new NextResponse(zipContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(
+            zipName
+          )}"`,
+          "Content-Type": "application/zip",
+        },
+      });
     }
   } catch {
     return NextResponse.json(

@@ -5,6 +5,7 @@ export const validateGetRequest = (request) => {
   const { searchParams } = new URL(request.url);
 
   const ids = searchParams.getAll("id");
+  const getFile = searchParams.get("getFile");
 
   const validateIds = ids.every((id) => validate(id, 4));
   if (!validateIds) {
@@ -14,7 +15,21 @@ export const validateGetRequest = (request) => {
     };
   }
 
-  return { valid: true, data: { ids } };
+  if (getFile !== null && getFile !== true) {
+    return {
+      valid: false,
+      message: "Bad request: 'getFile' should be set with true or unset",
+    };
+  }
+
+  if (getFile && !ids.length) {
+    return {
+      valid: false,
+      message: "Bad request: 'id' required with 'getFile'",
+    };
+  }
+
+  return { valid: true, data: { ids, getFile } };
 };
 
 // --- PUT request

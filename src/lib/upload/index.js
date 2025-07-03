@@ -5,38 +5,30 @@ import fs from "fs/promises";
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
 export const getUploadsWhere = async (where = {}) => {
-  try {
-    let whereQuery = "";
-    const values = [];
-    const clauses = [];
+  const clauses = [];
+  const values = [];
 
-    Object.entries(where).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        values.push(value);
-        clauses.push(`u."${key}" = ANY($${values.length})`);
-      } else {
-        values.push(value);
-        clauses.push(`u."${key}" = $${values.length}`);
-      }
-    });
-
-    if (clauses.length > 0) {
-      whereQuery = "WHERE " + clauses.join(" AND ");
+  Object.entries(where).forEach(([field, value]) => {
+    if (Array.isArray(value)) {
+      values.push(value);
+      clauses.push(`up.${field} = ANY($${values.length})`);
+    } else {
+      values.push(value);
+      clauses.push(`up.${field} = $${values.length}`);
     }
+  });
 
-    const query = `
+  const whereQuery = clauses.length ? "WHERE " + clauses.join(" AND ") : "";
+
+  const query = `
       SELECT 
-        u.id,
-        u."displayName",
-        u.date,
-        u.type,
-        u.status,
-        u."fileName",
-        u.path,
-        u.hash,
-        us.username,
-
-        -- FICHES ORDERED BY REF
+        up.id,
+        up.display_name AS "displayName",
+        up.date,
+        up.type,
+        up.status,
+        up.file_name AS "fileName",
+        us.username AS "user",
         (
           SELECT COALESCE(
             JSON_AGG(
@@ -45,55 +37,70 @@ export const getUploadsWhere = async (where = {}) => {
                 'ref', f.ref,
                 'source', s.name,
                 'date', f.date,
-                'object', f.object,
-                'summary', f.summary,
-                'dateDistribute', f."dateDistribute",
+                'dateDistribute', f.date_distribute,
                 'status', f.status,
-                'path', f.path,
-                'hash', f.hash,
-                'dump', f.dump
               )
               ORDER BY f.ref
             ),
             '[]'
           )
           FROM fiche f
-          LEFT JOIN source s ON f."sourceId" = s.id
-          WHERE f."uploadId" = u.id
+          LEFT JOIN source s ON f.source_id = s.id
+          WHERE f.upload_id = up.id
         ) AS fiches,
-
-        -- FAILED FICHES ORDERED BY ID
         (
           SELECT COALESCE(
             JSON_AGG(
               jsonb_build_object(
                 'id', ff.id,
-                'source', s2.name,
+                'source', s.name,
                 'date', ff.date,
-                'path', ff.path,
-                'hash', ff.hash
               )
               ORDER BY ff.id
             ),
             '[]'
           )
-          FROM "failedFiche" ff
-          LEFT JOIN source s2 ON ff."sourceId" = s2.id
-          WHERE ff."uploadId" = u.id
+          FROM failed_fiche ff
+          LEFT JOIN source s ON ff.source_id = s.id
+          WHERE ff.upload_id = u.id
         ) AS "failedFiches"
 
-      FROM upload u
-      LEFT JOIN "user" us ON u."userId" = us.id
+      FROM upload up
+      LEFT JOIN "user" us ON up.user_id = us.id
       ${whereQuery}
-      GROUP BY u.id, us.username
-      ORDER BY u.date DESC;
+      GROUP BY up.id, us.username
+      ORDER BY up.date DESC;
     `;
 
-    const { rows } = await pool.query(query, values);
-    return { ok: true, data: rows };
-  } catch {
-    return { error: true };
-  }
+  const { rows } = await pool.query(query, values);
+  return rows;
+};
+
+export const getUploadPathsAndFileNamesWhere = async (where = {}) => {
+  const clauses = [];
+  const values = [];
+
+  Object.entries(where).forEach(([field, value]) => {
+    if (Array.isArray(value)) {
+      values.push(value);
+      clauses.push(`up.${field} = ANY($${values.length})`);
+    } else {
+      values.push(value);
+      clauses.push(`up.${field} = $${values.length}`);
+    }
+  });
+
+  const whereQuery = clauses.length ? "WHERE " + clauses.join(" AND ") : "";
+
+  const query = `
+      SELECT up.path
+      FROM upload up
+      ${whereQuery}
+    `;
+
+  const { rows } = await pool.query(query, values);
+  const uploadPaths = rows.map((u) => u.path);
+  return uploadPaths;
 };
 
 export const getUploadById = async (id) => {
