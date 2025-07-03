@@ -454,7 +454,7 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
 
     const ficheQuery = `
       INSERT INTO fiche
-      (ref, "sourceId", date, object, summary, path, hash, "uploadId", dump)
+      (ref, source_id, date, object, summary, path, hash, upload_id, dump)
       values
       ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id`;
@@ -478,7 +478,7 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
     for (const docData of docsData) {
       const docQuery = `
       INSERT INTO document
-      (type, "ficheId", "fileName", path, hash, content, meta, "dumpInfo", original, "messageId")
+      (type, fiche_id, file_name, path, hash, content, meta, dump, original, message_id)
       values
       ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
       const {
@@ -640,7 +640,7 @@ while (true) {
 
     const outputDir = path.join(TEMP_FOLDER, id);
 
-    let { path: filePath, fileName } = upload;
+    let { path: filePath, file_name: fileName } = upload;
     filePath = path.join(FILE_STORAGE_PATH, filePath);
 
     await processZipFile(filePath, outputDir, fileName, id)

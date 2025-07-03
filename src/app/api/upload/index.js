@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
 import { DateTime } from "luxon";
@@ -34,56 +34,36 @@ export const validateGetRequest = (request) => {
   return { success: true, data: { ids, download } };
 };
 
-export const createFileBuffer = async (filePaths) => {
-  if (filePaths.length === 0) {
-    return NextResponse.json(
-      {
-        data: null,
-        message: "Bad request: 'filePath' required",
-      },
-      { status: 400 }
-    );
-  }
+export const createFileBuffer = async (uploads) => {
+  if (uploads.length === 1) {
+    const { filePath, fileName } = uploads[0];
 
-  const zip = new JSZip();
-
-  if (filePaths.length === 1) {
-    const filePath = filePaths[0];
     const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+    const fileBuffer = await fs.readFile(absFilePath);
 
-    if (!fs.existsSync(absFilePath)) {
-      return {
-        success: false,
-        data: null,
-        message: "Not found: file not found",
-        status: 404,
-      };
-    }
-
-    const fileBuffer = fs.readFileSync(absFilePath);
-    const fileName = path.basename(absFilePath);
+    return { fileBuffer, fileName };
   } else {
-    // Multiple files → ZIP
-    for (const filePath of filePaths) {
+    const zip = new JSZip();
+    const fileNames = [];
+    for (const { filePath, fileName } of uploads) {
       const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
-      if (!fs.existsSync(absFilePath)) continue;
-      const fileData = fs.readFileSync(absFilePath);
-      const fileName = path.basename(absFilePath);
-      zip.file(fileName, fileData);
+      const fileData = fs.readFile(absFilePath);
+
+      let uniqueFileName;
+      if (fileNames.includes(fileName)) {
+        const { ext, name } = path.parse(fileName);
+        uniqueFileName = `${name}(1)${ext}`;
+      } else {
+        uniqueFileName = fileName;
+      }
+
+      zip.file(uniqueFileName, fileData);
+      fileNames.push(uniqueFileName);
     }
 
     const zipContent = await zip.generateAsync({ type: "nodebuffer" });
 
-    const zipName = fileNameParam || "download.zip";
-
-    return new NextResponse(zipContent, {
-      headers: {
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(
-          zipName
-        )}"`,
-        "Content-Type": "application/zip",
-      },
-    });
+    return { fileBuffer: zipContent, fileName: "download.zip" };
   }
 };
 
@@ -101,11 +81,10 @@ export const validatePostRequest = async (request) => {
     const file = formData.get("file");
     const validFile = acceptableFileTypes.includes(file?.type);
 
-    console.log("type: ", type);
-    console.log("file: ", file?.type);
     if (!file || !validFile) {
       return {
-        valid: false,
+        success: false,
+        data: null,
         message: "Bad request: File missing or invalid type",
       };
     }
@@ -116,25 +95,29 @@ export const validatePostRequest = async (request) => {
     const documents = formData.getAll("documents");
     if (!source) {
       return {
-        valid: false,
+        success: false,
+        data: null,
         message: "Bad request: 'source' is required",
       };
     }
     if (!object) {
       return {
-        valid: false,
+        success: false,
+        data: null,
         message: "Bad request: 'object' is required",
       };
     }
     if (!summary) {
       return {
-        valid: false,
+        success: false,
+        data: null,
         message: "Bad request: 'summary' is required",
       };
     }
     if (documents.length === 0) {
       return {
-        valid: false,
+        success: false,
+        data: null,
         message: "Bad request: At least one source document is required",
       };
     }
@@ -144,31 +127,35 @@ export const validatePostRequest = async (request) => {
       const message = document.get("message");
       if (!type || !["File", "Message", "Attachment"].includes(type)) {
         return {
-          valid: false,
+          success: false,
+          data: null,
           message: "Bad request: Invalid document type",
         };
       }
       if (!file) {
         return {
-          valid: false,
+          success: false,
+          data: null,
           message: "Bad request: Document file is required",
         };
       }
       if (type === "Attachment" && !message) {
         return {
-          valid: false,
+          success: false,
+          data: null,
           message: "Bad request: Message is required for attachments",
         };
       }
     }
   } else {
     return {
-      valid: false,
+      success: false,
+      data: null,
       message: "Bad request: Invalid type",
     };
   }
 
-  return { valid: true, output: { formData } };
+  return { success: true, data: { formData } };
 };
 
 export const constructPostData = async (formData, userId) => {
@@ -184,12 +171,8 @@ export const constructPostData = async (formData, userId) => {
     const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
     const formatDateForPath = formatDate.toFormat("yyyyMMdd");
 
-    const countResponse = await countUploadsWhereDisplayNameLike(
-      formatDateForName
-    );
-    if (countResponse.error) return null;
-
-    const rank = countResponse.data + 1;
+    const count = await countUploadsWhereDisplayNameLike(formatDateForName);
+    const rank = count + 1;
 
     const dirPath = path.join("data", "uploads", formatDateForPath);
 
@@ -227,7 +210,8 @@ export const constructPostData = async (formData, userId) => {
     }
 
     return { uploadData, fileData };
-  } catch {
+  } catch (e) {
+    console.log(">>>", e);
     return null;
   }
 };
@@ -240,7 +224,8 @@ export const validateDeleteRequest = async (request) => {
 
   if (!id) {
     return {
-      valid: false,
+      success: false,
+      data: null,
       message: "Bad request: 'id' required",
     };
   }
@@ -248,10 +233,11 @@ export const validateDeleteRequest = async (request) => {
   const validateId = validate(id, 4);
   if (!validateId) {
     return {
-      valid: false,
+      success: false,
+      data: null,
       message: "Bad request: 'id' should be a valid uuid",
     };
   }
 
-  return { valid: true, output: { id } };
+  return { success: true, data: { id } };
 };

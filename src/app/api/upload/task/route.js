@@ -8,20 +8,8 @@ export const POST = async (request) => {
   try {
     const { id: userId, permissions = [] } = await getUser();
 
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Internal server error: failed to fetch userId",
-        },
-        { status: 500 }
-      );
-    }
-
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_UPLOADS");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_UPLOADS");
-
     if (!hasAllAccess && !hasOwnAccess) {
       return NextResponse.json(
         { success: false, data: null, message: "Forbidden: no UPDATE access" },
@@ -29,28 +17,15 @@ export const POST = async (request) => {
       );
     }
 
-    const validationResult = await validatePostRequest(request);
-    if (!validationResult.valid) {
-      return NextResponse.json(
-        { success: false, data: null, message: validationResult.message },
-        { status: 400 }
-      );
+    const { success, data, message } = await validatePostRequest(request);
+    if (!success) {
+      return NextResponse.json({ success, data, message }, { status: 400 });
     }
 
-    const { id, task } = validationResult.output;
+    const { id, task } = data;
 
-    const getResponse = await getUploadById(id);
-    if (getResponse.error) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Internal server error: failed to fetch upload owner",
-        },
-        { status: 500 }
-      );
-    }
-    if (getResponse.not_found) {
+    const upload = await getUploadById(id);
+    if (!upload) {
       return NextResponse.json(
         {
           success: false,
@@ -61,7 +36,7 @@ export const POST = async (request) => {
       );
     }
 
-    const { status, userId: ownerId } = getResponse.data;
+    const { status, user_id: ownerId } = upload;
 
     if (!hasAllAccess && userId !== ownerId) {
       return NextResponse.json(

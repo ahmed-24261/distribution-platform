@@ -4,6 +4,7 @@ export const getUser = async () => {
   // change this two lines by cookies.getUser()
 
   const username = "admin1";
+
   const response = await getUserByUsername(username);
   if (response.ok) {
     const { id: userId } = response.data;

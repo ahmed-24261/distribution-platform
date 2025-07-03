@@ -63,6 +63,8 @@ const UploadHistory = () => {
       )
     );
 
+    console.log(message);
+
     if (success) {
       toast.success("Traitement commencé", {
         description: message,
@@ -74,13 +76,10 @@ const UploadHistory = () => {
     }
   };
 
-  const handleDownload = async (filePath, fileName) => {
+  const handleDownload = async (id) => {
     try {
-      let request = `/api/download?filePath=${filePath}`;
+      const request = `/api/upload?id=${id}&download=true`;
 
-      if (fileName) {
-        request = request + `&fileName=${fileName}`;
-      }
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
@@ -100,6 +99,7 @@ const UploadHistory = () => {
       });
     }
   };
+
   const handleDelete = async (id) => {
     const response = await fetch(`api/upload?id=${id}`, {
       method: "DELETE",
@@ -219,9 +219,7 @@ const UploadHistory = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() =>
-                                handleDownload(upload.path, upload.fileName)
-                              }
+                              onClick={() => handleDownload(upload.id)}
                             >
                               <Download className="h-4 w-4" />
                             </Button>
