@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
-  getUploadsWhere,
-  getUploadPathsAndFileNamesWhere,
+  getUploadsForConsumption,
+  getUploads,
   getUploadByHash,
   createUpload,
   deleteUpload,
 } from "@/lib/upload";
 import {
   validateGetRequest,
-  validatePostRequest,
-  constructPostData,
-  validateDeleteRequest,
   createFileBuffer,
+  validatePostRequest,
+  constructUploadData,
+  validateDeleteRequest,
 } from "./";
 
 export const GET = async (request) => {
@@ -35,30 +35,27 @@ export const GET = async (request) => {
 
     const { ids, download } = data;
 
-    const where = {};
-    if (ids.length) where.id = ids;
-    if (!hasAllAccess) where.user_id = userId;
+    const ownerId = !hasAllAccess ? userId : null;
 
-    if (!download) {
-      const uploads = await getUploadsWhere(where);
-      return NextResponse.json(
-        { success: true, data: uploads, message: null },
-        { status: 200 }
-      );
+    if (download) {
+      const uploads = await getUploads(ids, ownerId);
+      const { fileBuffer, fileName } = await createFileBuffer(uploads);
+      return new NextResponse(fileBuffer, {
+        headers: {
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(
+            fileName
+          )}"`,
+          "Content-Type": "application/zip",
+        },
+      });
     }
 
-    const uploads = await getUploadPathsAndFileNamesWhere(where);
-    const { fileBuffer, fileName } = await createFileBuffer(uploads);
-    return new NextResponse(fileBuffer, {
-      headers: {
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(
-          fileName
-        )}"`,
-        "Content-Type": "application/octet-stream",
-      },
-    });
-  } catch (e) {
-    console.log(e);
+    const uploads = await getUploadsForConsumption(ids, ownerId);
+    return NextResponse.json(
+      { success: true, data: uploads, message: null },
+      { status: 200 }
+    );
+  } catch {
     return NextResponse.json(
       { success: false, data: [], message: "Internal server error" },
       { status: 500 }
@@ -85,19 +82,10 @@ export const POST = async (request) => {
 
     const { formData } = data;
 
-    const constructionResult = await constructPostData(formData, userId);
-    if (!constructionResult) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Internal server error: failed to construct post data",
-        },
-        { status: 500 }
-      );
-    }
-
-    const { uploadData, fileData } = constructionResult;
+    const { uploadData, fileData } = await constructUploadData(
+      formData,
+      userId
+    );
 
     const upload = await getUploadByHash(uploadData.hash);
     if (upload) {
@@ -107,7 +95,7 @@ export const POST = async (request) => {
           data: null,
           message: "Already Exists: upload already exist",
         },
-        { status: 403 }
+        { status: 409 }
       );
     }
 
@@ -166,7 +154,11 @@ export const DELETE = async (request) => {
       );
     }
     return NextResponse.json(
-      { success: true, data: id, message: "Upload deleted successfully" },
+      {
+        success: true,
+        data: deletedUploadId,
+        message: "Upload deleted successfully",
+      },
       { status: 200 }
     );
   } catch {

@@ -628,7 +628,7 @@ const updateUploadStatusById = async (id, status) => {
 
 while (true) {
   try {
-    const result = await redis.blPop("uploadsToProcess", 0);
+    const result = await redis.blPop("uploadsToBeProcessed", 0);
     const id = result?.element;
 
     const upload = await getUploadById(id);

@@ -101,7 +101,7 @@ CREATE TABLE
 		date TIMESTAMP DEFAULT now () NOT NULL,
 		object TEXT NOT NULL,
 		summary TEXT NOT NULL,
-		create_by TEXT,
+		created_by TEXT,
 		date_distribute TIMESTAMP,
 		status fiche_status DEFAULT 'suspended' NOT NULL,
 		path TEXT NOT NULL UNIQUE,

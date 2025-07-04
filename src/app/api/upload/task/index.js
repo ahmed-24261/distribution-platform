@@ -1,4 +1,4 @@
-import validate from "uuid-validate";
+import { validate as isUUID } from "uuid";
 
 export const validatePostRequest = async (request) => {
   const { id, task } = await request.json();
@@ -20,12 +20,12 @@ export const validatePostRequest = async (request) => {
     };
   }
 
-  const validateId = validate(id, 4);
-  if (!validateId) {
+  const invalidId = !isUUID(id, 4);
+  if (invalidId) {
     return {
       success: false,
       data: null,
-      message: "Bad request: 'id' should be a valid uuid",
+      message: "Bad request: 'id' must be a valid UUID",
     };
   }
 

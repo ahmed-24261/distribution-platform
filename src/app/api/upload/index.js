@@ -3,7 +3,7 @@ import path from "path";
 import JSZip from "jszip";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
-import validate from "uuid-validate";
+import { validate as isUUID } from "uuid";
 import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
@@ -15,12 +15,12 @@ export const validateGetRequest = (request) => {
   const ids = searchParams.getAll("id");
   const download = searchParams.get("download");
 
-  const validatedIds = ids.every((id) => validate(id, 4));
-  if (!validatedIds) {
+  const invalidIds = ids.filter((id) => !isUUID(id, 4));
+  if (invalidIds.length > 0) {
     return {
       success: false,
       data: [],
-      message: "Bad request: 'id' should be a valid uuid",
+      message: "Bad request: 'id' must be a valid UUID",
     };
   }
 
@@ -28,15 +28,19 @@ export const validateGetRequest = (request) => {
     return {
       success: false,
       data: [],
-      message: "Bad request: 'download' should be set with true or unset",
+      message: `Bad request: 'download' must be "true" or unset.`,
     };
   }
-  return { success: true, data: { ids, download } };
+
+  return {
+    success: true,
+    data: { ids, download },
+  };
 };
 
 export const createFileBuffer = async (uploads) => {
   if (uploads.length === 1) {
-    const { filePath, fileName } = uploads[0];
+    const { path: filePath, file_name: fileName } = uploads[0];
 
     const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
     const fileBuffer = await fs.readFile(absFilePath);
@@ -45,7 +49,7 @@ export const createFileBuffer = async (uploads) => {
   } else {
     const zip = new JSZip();
     const fileNames = [];
-    for (const { filePath, fileName } of uploads) {
+    for (const { path: filePath, file_name: fileName } of uploads) {
       const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
       const fileData = fs.readFile(absFilePath);
 
@@ -63,7 +67,7 @@ export const createFileBuffer = async (uploads) => {
 
     const zipContent = await zip.generateAsync({ type: "nodebuffer" });
 
-    return { fileBuffer: zipContent, fileName: "download.zip" };
+    return { fileBuffer: zipContent, fileName: "uploads.zip" };
   }
 };
 
@@ -158,62 +162,57 @@ export const validatePostRequest = async (request) => {
   return { success: true, data: { formData } };
 };
 
-export const constructPostData = async (formData, userId) => {
-  try {
-    const type = formData.get("type");
+export const constructUploadData = async (formData, userId) => {
+  const uploadData = {};
+  let fileData;
 
-    const uploadData = { userId, type };
+  const type = formData.get("type");
 
-    let fileData;
+  const date = new Date();
+  const formatDate = DateTime.fromJSDate(date).setLocale("fr");
+  const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
+  const formatDateForPath = formatDate.toFormat("yyyyMMdd");
 
-    const date = new Date("2022-12-14");
-    const formatDate = DateTime.fromJSDate(date).setLocale("fr");
-    const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
-    const formatDateForPath = formatDate.toFormat("yyyyMMdd");
+  const count = await countUploadsWhereDisplayNameLike(formatDateForName);
+  const rank = count + 1;
 
-    const count = await countUploadsWhereDisplayNameLike(formatDateForName);
-    const rank = count + 1;
+  const dirPath = path.join("data", "uploads", formatDateForPath);
+  const displayName = `${formatDateForName}-${type}-${rank}`;
 
-    const dirPath = path.join("data", "uploads", formatDateForPath);
+  uploadData.userId = userId;
+  uploadData.type = type;
+  uploadData.date = date.toISOString();
+  uploadData.displayName = displayName;
 
-    const displayName = `${formatDateForName}-${type}-${rank}`;
+  if (type === "file" || type === "api") {
+    const file = formData.get("file");
 
-    uploadData.date = date.toISOString();
-    uploadData.displayName = displayName;
+    const fileName = file.name;
+    const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
 
-    if (type === "file" || type === "api") {
-      const file = formData.get("file");
+    uploadData.fileName = fileName;
+    uploadData.path = filePath;
 
-      const fileName = file.name;
-      const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
+    fileData = Buffer.from(await file.arrayBuffer());
+    uploadData.hash = calculateFileHash(fileData);
+  } else {
+    const source = formData.get("source");
+    const object = formData.get("object");
+    const summary = formData.get("summary");
+    const documents = formData.getAll("documents");
 
-      uploadData.fileName = fileName;
-      uploadData.path = filePath;
+    let dump = formData.get("dump");
 
-      fileData = Buffer.from(await file.arrayBuffer());
-      uploadData.hash = calculateFileHash(fileData);
-    } else {
-      const source = formData.get("source");
-      const object = formData.get("object");
-      const summary = formData.get("summary");
-      const documents = formData.getAll("documents");
+    // construct data.json and fiche.docx
+    // create a zipFile as fileData
+    // calculate hash of the zipFile
+    // suggest a fileName and path
 
-      let dump = formData.get("dump");
-
-      // construct data.json and fiche.docx
-      // create a zipFile as fileData
-      // calculate hash of the zipFile
-      // suggest a fileName and path
-
-      const fileName = `${formatDateForName}_formulaire.zip`;
-      const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
-    }
-
-    return { uploadData, fileData };
-  } catch (e) {
-    console.log(">>>", e);
-    return null;
+    const fileName = `${formatDateForName}_formulaire.zip`;
+    const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
   }
+
+  return { uploadData, fileData };
 };
 
 // --- DELETE request
@@ -230,12 +229,12 @@ export const validateDeleteRequest = async (request) => {
     };
   }
 
-  const validateId = validate(id, 4);
-  if (!validateId) {
+  const invalidId = !isUUID(id, 4);
+  if (invalidId) {
     return {
       success: false,
       data: null,
-      message: "Bad request: 'id' should be a valid uuid",
+      message: "Bad request: 'id' must be a valid UUID",
     };
   }
 

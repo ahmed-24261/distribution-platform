@@ -4,7 +4,21 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getFicheWithDocsAndObsByIdAndUserId = async (id, userId) => {
+export const getFichesForConsumption = async (ids, isUser) => {
+  const clauses = [];
+  const values = [];
+
+  if (ids.length) {
+    values.push(ids);
+    clauses.push(`f.id = ANY($${values.length})`);
+  }
+  if (isUser) {
+    values.push(isUser.userId);
+    clauses.push(`us.id = $${values.length}`);
+  }
+
+  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
+
   const query = `
       SELECT 
         f.id,
@@ -13,22 +27,23 @@ export const getFicheWithDocsAndObsByIdAndUserId = async (id, userId) => {
         f.date,
         f.object,
         f.summary,
-        f."createdBy",
+        f.created_by AS "createdBy",
         f.dump,
+        f.status,
         (
           SELECT COALESCE(
             JSON_AGG(
               jsonb_build_object(
                 'id', d.id,
                 'type', d.type,
-                'fileName', d."fileName",
+                'fileName', d.file_name
               )
-              ORDER BY d."fileName"
+              ORDER BY d.file_name
             ),
             '[]'
           )
           FROM document d
-          LEFT JOIN fiche ON d."ficheId" = fiche.id
+          LEFT JOIN fiche ON d.fiche_id = fiche.id
           WHERE fiche.id = f.id
         ) AS documents,
         (
@@ -39,9 +54,10 @@ export const getFicheWithDocsAndObsByIdAndUserId = async (id, userId) => {
                 'ref', f1.ref,
                 'object', f1.object,
                 'summary', f1.summary,
-                'createdBy', f1."createdBy",
+                'createdBy', f1.created_by,
                 'status', f1.status,
                 'date', f1.date,
+                'status', f1.status
               )
               ORDER BY f1.id
             ),
@@ -49,25 +65,63 @@ export const getFicheWithDocsAndObsByIdAndUserId = async (id, userId) => {
           )
           FROM fiche f1
           LEFT JOIN observations o ON o.observation = f1.id
-          LEFT JOIN fiche f2 ON o."ficheId" = f2.id
-          WHERE f2.id = f.id
+          LEFT JOIN fiche f2 ON o.fiche_id = f2.id
+          WHERE f2.id = f.id ${isUser ? "AND f1.status = 'valid'" : ""}
         ) AS observations
 
       FROM fiche f
-      JOIN "groupSource" gs ON f."sourceId" = gs."sourceId"
-      JOIN "user" u ON gs."groupId" = u."groupId"
-      JOIN source s ON s.id = f."sourceId"
-      JOIN document d ON d."ficheId" = f.id
-
-      WHERE f.id = $1 AND f.status = 'valid' AND u.id = $2
+      JOIN group_source gs ON f.source_id = gs.source_id
+      JOIN "user" us ON gs.group_id = us.group_id
+      JOIN source s ON s.id = f.source_id
+      JOIN document d ON d.fiche_id = f.id
+      ${whereQuery} ${isUser ? "AND f.status = 'valid'" : ""}
       GROUP BY f.id, s.name
       ORDER BY f.date DESC;
     `;
-  const values = [id, userId];
 
   const { rows } = await pool.query(query, values);
 
-  return { ok: true, data: rows };
+  return rows;
+};
+
+export const getFiches = async (ids, isUser) => {
+  const clauses = [];
+  const values = [];
+
+  if (ids.length) {
+    values.push(ids);
+    clauses.push(`f.id = ANY($${values.length})`);
+  }
+  if (isUser) {
+    values.push(isUser.userId);
+    clauses.push(`us.id = $${values.length}`);
+  }
+
+  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
+
+  const query = `
+      SELECT f.*,
+      (
+        SELECT COALESCE(
+          JSON_AGG( d.* ), '[]'
+        )
+        FROM document d
+        LEFT JOIN fiche ON d.fiche_id = fiche.id
+        WHERE fiche.id = f.id
+      ) AS documents
+      FROM fiche f
+      JOIN group_source gs ON f.source_id = gs.source_id
+      JOIN "user" us ON gs.group_id = us.group_id
+      JOIN source s ON s.id = f.source_id
+      JOIN document d ON d.fiche_id = f.id
+      ${whereQuery} ${isUser ? "AND f.status = 'valid'" : ""}
+      GROUP BY f.id, s.name
+      ORDER BY f.date DESC;
+    `;
+
+  const { rows } = await pool.query(query, values);
+
+  return rows;
 };
 
 export const getFichePathById = async (id) => {
@@ -87,7 +141,7 @@ export const getFiche = async (id) => {
     const query = `
         SELECT f.*, u.*
         FROM fiche f
-        JOIN upload u ON f."uploadId" = u.id
+        JOIN upload u ON f.upload_id = u.id
         WHERE f.id = $1;
         `;
     const values = [id];

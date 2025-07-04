@@ -4,21 +4,20 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getUploadsWhere = async (where = {}) => {
+export const getUploadsForConsumption = async (ids, userId) => {
   const clauses = [];
   const values = [];
 
-  Object.entries(where).forEach(([field, value]) => {
-    if (Array.isArray(value)) {
-      values.push(value);
-      clauses.push(`up.${field} = ANY($${values.length})`);
-    } else {
-      values.push(value);
-      clauses.push(`up.${field} = $${values.length}`);
-    }
-  });
+  if (ids.length) {
+    values.push(ids);
+    clauses.push(`up.id = ANY($${values.length})`);
+  }
+  if (userId) {
+    values.push(userId);
+    clauses.push(`up.user_id = $${values.length}`);
+  }
 
-  const whereQuery = clauses.length ? "WHERE " + clauses.join(" AND ") : "";
+  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
 
   const query = `
       SELECT 
@@ -76,24 +75,23 @@ export const getUploadsWhere = async (where = {}) => {
   return rows;
 };
 
-export const getUploadPathsAndFileNamesWhere = async (where = {}) => {
+export const getUploads = async (ids, userId) => {
   const clauses = [];
   const values = [];
 
-  Object.entries(where).forEach(([field, value]) => {
-    if (Array.isArray(value)) {
-      values.push(value);
-      clauses.push(`up.${field} = ANY($${values.length})`);
-    } else {
-      values.push(value);
-      clauses.push(`up.${field} = $${values.length}`);
-    }
-  });
+  if (ids.length) {
+    values.push(ids);
+    clauses.push(`up.id = ANY($${values.length})`);
+  }
+  if (userId) {
+    values.push(userId);
+    clauses.push(`up.user_id = $${values.length}`);
+  }
 
-  const whereQuery = clauses.length ? "WHERE " + clauses.join(" AND ") : "";
+  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
 
   const query = `
-      SELECT up.path AS "filePath", up.file_name As "fileName"
+      SELECT up.*
       FROM upload up
       ${whereQuery}
     `;
@@ -188,26 +186,6 @@ export const createUpload = async (uploadData, fileData) => {
   }
 };
 
-export const getUploadOwnerId = async (id) => {
-  try {
-    const query = `
-        SELECT "userId" as "ownerId"
-        FROM upload
-        WHERE id = $1;
-        `;
-    const values = [id];
-
-    const { rows, rowCount } = await pool.query(query, values);
-
-    if (!rowCount) return { not_found: true };
-
-    const { ownerId } = rows[0];
-    return { ok: true, data: ownerId };
-  } catch {
-    return { error: true };
-  }
-};
-
 export const deleteUpload = async (id) => {
   const client = await pool.connect();
 
@@ -221,7 +199,7 @@ export const deleteUpload = async (id) => {
               RETURNING id, path
           )
           SELECT
-              du.id AS uploadId,
+              du.id AS "uploadId",
               du.path AS "uPath",
               COALESCE(ARRAY_AGG(DISTINCT f.path) FILTER (WHERE f.id IS NOT NULL), '{}') AS "fichePaths",
               COALESCE(ARRAY_AGG(DISTINCT ff.path) FILTER (WHERE ff.id IS NOT NULL), '{}') AS "failedFichePaths"
@@ -254,7 +232,7 @@ export const deleteUpload = async (id) => {
     await client.query("COMMIT");
     client.release();
 
-    return { ok: true, data: uploadId };
+    return uploadId;
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();

@@ -48,19 +48,19 @@ export const POST = async (request) => {
         { status: 403 }
       );
     }
-    if (status !== "pending") {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Bad request: upload already processed",
-        },
-        { status: 400 }
-      );
-    }
 
     if (task === "process") {
-      await redis.rPush("uploadsToProcess", id);
+      if (status !== "pending") {
+        return NextResponse.json(
+          {
+            success: false,
+            data: null,
+            message: "Bad request: upload already processed",
+          },
+          { status: 400 }
+        );
+      }
+      await redis.rPush("uploadsToBeProcessed", id);
     }
 
     return NextResponse.json(

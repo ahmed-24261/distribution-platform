@@ -64,13 +64,7 @@ const ConsultUpload = ({ params }) => {
         if (!data.length) {
           notFound();
         } else {
-          const upload = data[0];
-          upload.fiches = upload.fiches.map((fiche) => ({
-            ...fiche,
-            newStatus: null,
-          }));
-
-          setUpload(upload);
+          setUpload(data[0]);
         }
       } else {
         alert(message);
@@ -93,13 +87,10 @@ const ConsultUpload = ({ params }) => {
     }
   }, [selectedItems]);
 
-  const handleDownload = async (filePath, fileName) => {
+  const handleDownload = async (id) => {
     try {
-      let request = `/api/download?filePath=${filePath}`;
+      const request = `/api/fiche?id=${id}&download=true`;
 
-      if (fileName) {
-        request = request + `&fileName=${fileName}`;
-      }
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
@@ -114,9 +105,7 @@ const ConsultUpload = ({ params }) => {
 
       window.location.href = request;
     } catch {
-      toast.error("Erreur lors du téléchargement", {
-        description: "Impossible de récupérer la ressource. Veuillez réessayer",
-      });
+      toast.error("Une erreur s'est produite");
     }
   };
 
@@ -788,7 +777,7 @@ const ConsultUpload = ({ params }) => {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDownload(fiche.path)}
+                                    onClick={() => handleDownload(fiche.id)}
                                   >
                                     <Download className="h-4 w-4" />
                                   </Button>

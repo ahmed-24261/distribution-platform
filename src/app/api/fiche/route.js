@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
+  getFichesForConsumption,
+  getFiches,
   getFiche,
-  getFichesWithDocumentsAndObservations,
   updateFiche,
   deleteFiche,
 } from "@/lib/fiche";
 import {
   validateGetRequest,
+  createFileBuffer,
   validatePutRequest,
   validateDeleteRequest,
 } from ".";
@@ -16,17 +18,6 @@ export const GET = async (request) => {
   try {
     // Get user
     const { id: userId, role, permissions = [] } = await getUser();
-    const isAdmin = ["admin", "superAdmin"].includes(role);
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Internal Server Error: failed to get user",
-        },
-        { status: 500 }
-      );
-    }
 
     // Check permissions
     const hasAccess = permissions.includes("CAN_GET_FICHES");
@@ -37,40 +28,33 @@ export const GET = async (request) => {
       );
     }
 
-    const validationResult = validateGetRequest(request);
-    if (!validationResult.valid) {
-      return NextResponse.json(
-        { success: false, data: [], message: validationResult.message },
-        { status: 400 }
-      );
+    const { success, data, message } = validateGetRequest(request);
+    if (!success) {
+      return NextResponse.json({ success, data, message }, { status: 400 });
     }
 
-    const { ids, getFile } = validationResult.data;
-    const getResponse = await getFichesWithDocumentsAndObservations(
-      ids,
-      userId,
-      { isAdmin }
-    );
-    if (!getResponse.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Internal Server Error: failed to fetch fiches",
+    const { ids, download, getFile } = data;
+    const isUser = role === "user" ? { userId } : null;
+
+    if (download) {
+      const fiches = await getFiches(ids, isUser);
+      const { fileBuffer, fileName } = await createFileBuffer(fiches);
+      return new NextResponse(fileBuffer, {
+        headers: {
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(
+            fileName
+          )}"`,
+          "Content-Type": "application/zip",
         },
-        { status: 500 }
-      );
+      });
     }
 
-    if (!getFile) {
-      return NextResponse.json(
-        { success: true, data: getResponse.data, message: null },
-        { status: 200 }
-      );
-    }
-    const fiche = getResponse.data[0];
-    if (fiche) {
-    }
+    const fiches = await getFichesForConsumption(ids, isUser);
+
+    return NextResponse.json(
+      { success: true, data: fiches, message: null },
+      { status: 200 }
+    );
   } catch (error) {
     console.log(error);
     return NextResponse.json(
@@ -158,7 +142,7 @@ export const PUT = async (request) => {
         });
         continue;
       }
-      updatedFicheIds.push(ficheId);
+      updatedFicheIds.push(updateResponse.data);
     }
 
     const total = items.length;
@@ -214,7 +198,8 @@ export const PUT = async (request) => {
         );
       }
     }
-  } catch {
+  } catch (e) {
+    console.log(e);
     return NextResponse.json(
       {
         success: false,

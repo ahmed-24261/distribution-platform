@@ -47,32 +47,34 @@ const UploadHistory = () => {
   }, []);
 
   const handleProcess = async (id) => {
-    const response = await fetch("api/upload/task", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id, task: "process" }),
-    });
-
-    const { success, data, message } = await response.json();
-
-    setUploads((prev) =>
-      prev.map((upload) =>
-        upload.id === data ? { ...upload, status: "processing" } : upload
-      )
-    );
-
-    console.log(message);
-
-    if (success) {
-      toast.success("Traitement commencé", {
-        description: message,
+    try {
+      const response = await fetch("api/upload/task", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id, task: "process" }),
       });
-    } else {
-      toast.error("Échec du traitement", {
-        description: message,
-      });
+
+      const { success, data, message } = await response.json();
+
+      setUploads((prev) =>
+        prev.map((upload) =>
+          upload.id === data ? { ...upload, status: "processing" } : upload
+        )
+      );
+
+      if (success) {
+        toast.success("Traitement commencé", {
+          description: message,
+        });
+      } else {
+        toast.error("Échec du traitement", {
+          description: message,
+        });
+      }
+    } catch {
+      toast.error("Une erreur s'est produite");
     }
   };
 
@@ -89,29 +91,37 @@ const UploadHistory = () => {
         return;
       }
       toast.success("Téléchargement lancé", {
-        description: "Votre ressource est en cours de téléchargement",
+        description: "Le téléversement est en cours de téléchargement",
       });
 
       window.location.href = request;
     } catch {
-      toast.error("Erreur lors du téléchargement", {
-        description: "Impossible de récupérer la ressource. Veuillez réessayer",
-      });
+      toast.error("Une erreur s'est produite");
     }
   };
 
   const handleDelete = async (id) => {
-    const response = await fetch(`api/upload?id=${id}`, {
-      method: "DELETE",
-    });
+    try {
+      const response = await fetch(`api/upload?id=${id}`, {
+        method: "DELETE",
+      });
 
-    const { success, data, message } = await response.json();
+      const { success, data, message } = await response.json();
 
-    setUploads((prev) => prev.filter((upload) => upload.id !== data));
+      setUploads((prev) => prev.filter((upload) => upload.id !== data));
 
-    toast(success ? "Téléversement supprimé" : "Échec de la suppression", {
-      description: message,
-    });
+      if (success) {
+        toast.success("Téléversement supprimé", {
+          description: message,
+        });
+      } else {
+        toast.error("Échec de la suppression", {
+          description: message,
+        });
+      }
+    } catch {
+      toast.error("Une erreur s'est produite");
+    }
   };
 
   return (
