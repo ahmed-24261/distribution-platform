@@ -62,22 +62,10 @@ export const GET = async (request) => {
 
 export const DELETE = async (request) => {
   try {
-    // Get user
     const { id: userId, permissions = [] } = await getUser();
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Internal Server Error: failed to get user",
-        },
-        { status: 500 }
-      );
-    }
 
-    // Check permissions
-    const hasAllAccess = permissions.includes("CAN_DELETE_ALL_FICHES");
-    const hasOwnAccess = permissions.includes("CAN_DELETE_OWN_FICHES");
+    const hasAllAccess = permissions.includes("CAN_DELETE_ALL_UPLOADS");
+    const hasOwnAccess = permissions.includes("CAN_DELETE_OWN_UPLOADS");
     if (!hasAllAccess && !hasOwnAccess) {
       return NextResponse.json(
         { success: false, data: [], message: "Forbidden: no DELETE access" },

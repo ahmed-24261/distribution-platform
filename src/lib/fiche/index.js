@@ -123,49 +123,43 @@ export const getFiches = async (ids, isUser) => {
   return rows;
 };
 
-export const getFiche = async (id) => {
-  try {
-    const query = `
-        SELECT f.*, u.*
+export const getOwnerFicheById = async (id) => {
+  const query = `
+        SELECT up.user_id AS "ownerId"
         FROM fiche f
-        JOIN upload u ON f.upload_id = u.id
+        JOIN upload up ON f.upload_id = up.id
         WHERE f.id = $1;
         `;
-    const values = [id];
+  const values = [id];
 
-    const { rows, rowCount } = await pool.query(query, values);
+  const { rows, rowCount } = await pool.query(query, values);
 
-    if (!rowCount) return { not_found: true };
+  if (!rowCount) return null;
 
-    return { ok: true, data: rows[0] };
-  } catch {
-    return { error: true };
-  }
+  const { ownerId } = rows[0];
+
+  return ownerId;
 };
 
 export const updateFiche = async (id, update) => {
-  try {
-    const keys = Object.keys(update);
-    if (keys.length === 0) return false;
+  const keys = Object.keys(update);
+  if (keys.length === 0) return false;
 
-    const setClauses = keys.map((key, index) => `"${key}" = $${index + 1}`);
+  const setClauses = keys.map((key, index) => `"${key}" = $${index + 1}`);
 
-    const query = `
+  const query = `
         UPDATE fiche
         SET ${setClauses.join(", ")}
         WHERE id = $${keys.length + 1}
         RETURNING id;
         `;
-    const values = keys.map((key) => update[key]);
+  const values = keys.map((key) => update[key]);
 
-    const { rowCount } = await pool.query(query, [...values, id]);
+  const { rowCount } = await pool.query(query, [...values, id]);
 
-    if (!rowCount) return null;
+  if (!rowCount) return null;
 
-    return { ok: true, data: id };
-  } catch {
-    return { error: true };
-  }
+  return id;
 };
 
 export const deleteFiche = async (id) => {
@@ -195,10 +189,10 @@ export const deleteFiche = async (id) => {
 
     await client.query("COMMIT");
     client.release();
-    return { ok: true, data: id };
-  } catch {
+    return id;
+  } catch (error) {
     await client.query("ROLLBACK");
     client.release();
-    return { error: true };
+    return error;
   }
 };

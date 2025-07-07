@@ -40,7 +40,8 @@ export const validateGetRequest = (request) => {
 
   if (getFile && ids.length !== 1) {
     return {
-      valid: false,
+      success: false,
+      data: [],
       message: "Bad request: a single 'id' required with 'getFile'",
     };
   }
@@ -111,26 +112,29 @@ export const validatePutRequest = async (request) => {
 
     if (!id) {
       return {
-        valid: false,
+        success: false,
+        data: [],
         message: "Bad request: 'id' required",
       };
     }
 
     if (!validate(id, 4)) {
       return {
-        valid: false,
+        success: false,
+        data: [],
         message: "Bad request: 'id' must be valid UUIDv4 string",
       };
     }
 
     if (!update) {
       return {
-        valid: false,
+        success: false,
+        data: [],
         message: "Bad request: 'update' required",
       };
     }
 
-    return { valid: true, data: { items } };
+    return { success: true, data: { items } };
   }
 };
 

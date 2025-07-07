@@ -3,7 +3,7 @@ import { getUser } from "@/lib/api";
 import {
   getFichesForConsumption,
   getFiches,
-  getFiche,
+  getOwnerFicheById,
   updateFiche,
   deleteFiche,
 } from "@/lib/fiche";
@@ -73,16 +73,6 @@ export const GET = async (request) => {
 export const PUT = async (request) => {
   try {
     const { id: userId, permissions = [] } = await getUser();
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Internal Server Error: failed to get user",
-        },
-        { status: 500 }
-      );
-    }
 
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_FICHES");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_FICHES");
@@ -93,85 +83,75 @@ export const PUT = async (request) => {
       );
     }
 
-    const validationResult = await validatePutRequest(request);
-    if (!validationResult.valid) {
-      return NextResponse.json(
-        { success: false, data: [], message: validationResult.message },
-        { status: 400 }
-      );
+    const { success, data, message } = validatePutRequest(request);
+    if (!success) {
+      return NextResponse.json({ success, data, message }, { status: 400 });
     }
 
-    const { items } = validationResult.data;
+    const { items } = data;
 
-    const updatedFicheIds = [];
-    const errors = [];
+    if (items.length === 1) {
+      const item = items[0];
 
-    for (const item of items) {
-      const { id, update } = item;
+      const id = item?.id;
+      const update = item?.update;
 
-      const getResponse = await getFiche(id);
-      if (getResponse.error) {
-        errors.push({
-          id,
-          message: "Internal Server Error: failed to get fiche",
-          status: 500,
-        });
-        continue;
-      } else if (getResponse.not_found) {
-        errors.push({
-          id,
-          message: "Not found: fiche not found",
-          status: 404,
-        });
-        continue;
+      const ownerId = await getOwnerFicheById(id);
+      if (!ownerId) {
+        return NextResponse.json(
+          { success: false, data: [], message: "Not found: fiche not found" },
+          { status: 404 }
+        );
       }
 
-      const { userId: ownerId } = getResponse.data;
       if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) {
-        errors.push({
-          id,
-          message: "Forbidden: not allowed to update fiche",
-          status: 403,
-        });
-        continue;
-      }
-
-      const updateResponse = await updateFiche(id, update);
-      if (updateResponse.error) {
-        errors.push({
-          id,
-          message: "Internal Server Error: failed to update fiche",
-          status: 500,
-        });
-        continue;
-      }
-      updatedFicheIds.push(updateResponse.data);
-    }
-
-    const total = items.length;
-    const updated = updatedFicheIds.length;
-
-    if (total === 1) {
-      if (total !== updated) {
-        const error = errors[0];
         return NextResponse.json(
           {
             success: false,
             data: [],
-            message: error.message,
+            message: "Forbidden: not allowed to update this fiche",
           },
-          { status: error.status }
+          { status: 403 }
         );
       }
-      return NextResponse.json(
-        {
-          success: true,
-          data: updatedFicheIds,
-          message: "Fiche was updated successfully",
-        },
-        { status: 200 }
-      );
+
+      const updatedFicheId = await updateFiche(id, update);
+      if (!updatedFicheId) {
+        return NextResponse.json(
+          {
+            success: false,
+            data: [],
+            message: "Internal Server Error: failed to update fiche",
+          },
+          { status: 500 }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            success: true,
+            data: [id],
+            message: "Fiche was updated successfully",
+          },
+          { status: 200 }
+        );
+      }
     } else {
+      const updatedFicheIds = [];
+      for (const id of ids) {
+        const ownerId = await getOwnerFicheById(id);
+        if (!ownerId) continue;
+
+        if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) continue;
+
+        const updatedFicheId = await updateFiche(id);
+        if (updatedFicheId) {
+          updatedFicheIds.push(updatedFicheId);
+        }
+      }
+
+      const total = ids.length;
+      const updated = updatedFicheIds.length;
+
       if (updated === 0) {
         return NextResponse.json(
           {
@@ -186,7 +166,7 @@ export const PUT = async (request) => {
           {
             success: true,
             data: updatedFicheIds,
-            message: `${updated} out of ${total} resources have been successfully updated`,
+            message: `${updated} out of ${total} fiches have been successfully updated`,
           },
           { status: 200 }
         );
@@ -194,15 +174,14 @@ export const PUT = async (request) => {
         return NextResponse.json(
           {
             success: true,
-            data: updatedFicheIds,
-            message: `All resources have been successfully updated`,
+            data: ids,
+            message: "Fiche was updated successfully",
           },
           { status: 200 }
         );
       }
     }
-  } catch (e) {
-    console.log(e);
+  } catch {
     return NextResponse.json(
       {
         success: false,
@@ -217,16 +196,6 @@ export const PUT = async (request) => {
 export const DELETE = async (request) => {
   try {
     const { id: userId, permissions = [] } = await getUser();
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: "Internal Server Error: failed to get user",
-        },
-        { status: 500 }
-      );
-    }
 
     const hasAllAccess = permissions.includes("CAN_DELETE_ALL_FICHES");
     const hasOwnAccess = permissions.includes("CAN_DELETE_OWN_FICHES");
@@ -237,83 +206,72 @@ export const DELETE = async (request) => {
       );
     }
 
-    const validationResult = validateDeleteRequest(request);
-    if (!validationResult.valid) {
-      return NextResponse.json(
-        { success: false, data: [], message: validationResult.message },
-        { status: 400 }
-      );
+    const { success, data, message } = validateDeleteRequest(request);
+    if (!success) {
+      return NextResponse.json({ success, data, message }, { status: 400 });
     }
 
-    const { ids } = validationResult.data;
+    const { ids } = data;
 
-    const deletedFicheIds = [];
-    const errors = [];
+    if (ids.length === 1) {
+      const id = ids[0];
 
-    for (const id of ids) {
-      const getResponse = await getFiche(id);
-      if (getResponse.error) {
-        errors.push({
-          id,
-          message: "Internal Server Error: failed to get fiche",
-          status: 500,
-        });
-        continue;
-      } else if (getResponse.not_found) {
-        errors.push({
-          id,
-          message: "Not found: fiche not found",
-          status: 404,
-        });
-        continue;
+      const ownerId = await getOwnerFicheById(id);
+      if (!ownerId) {
+        return NextResponse.json(
+          { success: false, data: [], message: "Not found: fiche not found" },
+          { status: 404 }
+        );
       }
 
-      const { userId: ownerId } = getResponse.data;
       if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) {
-        errors.push({
-          id,
-          message: "Forbidden: not allowed to delete fiche",
-          status: 403,
-        });
-        continue;
-      }
-
-      const deleteResponse = await deleteFiche(id);
-      if (deleteResponse.error) {
-        errors.push({
-          id,
-          message: "Internal Server Error: failed to delete fiche",
-          status: 500,
-        });
-        continue;
-      }
-      deletedFicheIds.push(id);
-    }
-
-    const total = ids.length;
-    const deleted = deletedFicheIds.length;
-
-    if (total === 1) {
-      if (total !== deleted) {
-        const error = errors[0];
         return NextResponse.json(
           {
             success: false,
             data: [],
-            message: error.message,
+            message: "Forbidden: not allowed to delete this fiche",
           },
-          { status: error.status }
+          { status: 403 }
         );
       }
-      return NextResponse.json(
-        {
-          success: true,
-          data: ids,
-          message: "Fiche was deleted successfully",
-        },
-        { status: 200 }
-      );
+
+      const deletedFicheId = await deleteFiche(id);
+      if (!deletedFicheId) {
+        return NextResponse.json(
+          {
+            success: false,
+            data: [],
+            message: "Internal Server Error: failed to delete fiche",
+          },
+          { status: 500 }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            success: true,
+            data: [id],
+            message: "Fiche was deleted successfully",
+          },
+          { status: 200 }
+        );
+      }
     } else {
+      const deletedFicheIds = [];
+      for (const id of ids) {
+        const ownerId = await getOwnerFicheById(id);
+        if (!ownerId) continue;
+
+        if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) continue;
+
+        const deletedFicheId = await deleteFiche(id);
+        if (deletedFicheId) {
+          deletedFicheIds.push(deletedFicheId);
+        }
+      }
+
+      const total = ids.length;
+      const deleted = deletedFicheIds.length;
+
       if (deleted === 0) {
         return NextResponse.json(
           {
@@ -328,7 +286,7 @@ export const DELETE = async (request) => {
           {
             success: true,
             data: deletedFicheIds,
-            message: `${deleted} out of ${total} resources have been successfully deleted`,
+            message: `${deleted} out of ${total} fiches have been successfully deleted`,
           },
           { status: 200 }
         );
@@ -336,8 +294,8 @@ export const DELETE = async (request) => {
         return NextResponse.json(
           {
             success: true,
-            data: deletedFicheIds,
-            message: `All resources have been successfully deleted`,
+            data: ids,
+            message: "Fiche was deleted successfully",
           },
           { status: 200 }
         );
