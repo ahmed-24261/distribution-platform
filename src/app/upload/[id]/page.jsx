@@ -87,7 +87,29 @@ const ConsultUpload = ({ params }) => {
     }
   }, [selectedItems]);
 
-  const handleDownload = async (id) => {
+  const handleDownloadUpload = async (id) => {
+    try {
+      const request = `/api/upload?id=${id}&download=true`;
+
+      const response = await fetch(request);
+      if (!response.ok) {
+        const { message } = await response.json();
+        toast.error("Erreur lors du téléchargement", {
+          description: message,
+        });
+        return;
+      }
+      toast.success("Téléchargement lancé", {
+        description: "Le téléversement est en cours de téléchargement",
+      });
+
+      window.location.href = request;
+    } catch {
+      toast.error("Une erreur s'est produite");
+    }
+  };
+
+  const handleDownloadFiche = async (id) => {
     try {
       const request = `/api/fiche?id=${id}&download=true`;
 
@@ -109,25 +131,34 @@ const ConsultUpload = ({ params }) => {
     }
   };
 
+  const handleDownloadFailedFiche = async (id) => {
+    try {
+      const request = `/api/failedFiche?id=${id}&download=true`;
+
+      const response = await fetch(request);
+      if (!response.ok) {
+        const { message } = await response.json();
+        toast.error("Erreur lors du téléchargement", {
+          description: message,
+        });
+        return;
+      }
+      toast.success("Téléchargement lancé", {
+        description: "Votre ressource est en cours de téléchargement",
+      });
+
+      window.location.href = request;
+    } catch {
+      toast.error("Une erreur s'est produite");
+    }
+  };
+
   const handleDownloadBulk = async () => {
     try {
-      const fichePaths = upload.fiches
-        .filter((fiche) => selectedItems.fiches.includes(fiche.id))
-        .map((fiche) => fiche.path);
+      const ficheIds = selectedItems.fiches;
+      const queryParams = ficheIds.map((id) => `id=${id}`).join("&");
 
-      const failedFichePaths = upload.failedFiches
-        .filter(
-          (fiche) => selectedItems.failedFiches.includes(fiche.id) && fiche.path
-        )
-        .map((fiche) => fiche.path);
-
-      const paths = [...fichePaths, ...failedFichePaths];
-      console.log(paths);
-      const query = paths
-        .map((path) => `filePath=${encodeURIComponent(path)}`)
-        .join("&");
-
-      const request = `/api/download?${query}`;
+      const request = `/api/fiche?${queryParams}&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
@@ -140,12 +171,10 @@ const ConsultUpload = ({ params }) => {
       toast.success("Téléchargement lancé", {
         description: "Votre ressources est en cours de téléchargement",
       });
+
       window.location.href = request;
     } catch {
-      toast.error("Erreur lors du téléchargement", {
-        description:
-          "Impossible de récupérer les ressources. Veuillez réessayer",
-      });
+      toast.error("Une erreur s'est produite");
     }
   };
 
@@ -458,7 +487,7 @@ const ConsultUpload = ({ params }) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDownload(upload.path, upload.fileName)}
+                    onClick={() => handleDownloadUpload(upload.id)}
                     className="h-7 w-7 p-0"
                   >
                     <Download className="h-4 w-4 text-gray-600" />
@@ -777,7 +806,9 @@ const ConsultUpload = ({ params }) => {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDownload(fiche.id)}
+                                    onClick={() =>
+                                      handleDownloadFiche(fiche.id)
+                                    }
                                   >
                                     <Download className="h-4 w-4" />
                                   </Button>
@@ -866,22 +897,22 @@ const ConsultUpload = ({ params }) => {
                           <TableCell>{fiche.message}</TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-1">
-                              {fiche?.path && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDownload(fiche.path)}
-                                    >
-                                      <Download className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Télécharger</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleDownloadFailedFiche(fiche.id)
+                                    }
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Télécharger</p>
+                                </TooltipContent>
+                              </Tooltip>
 
                               <Tooltip>
                                 <TooltipTrigger asChild>

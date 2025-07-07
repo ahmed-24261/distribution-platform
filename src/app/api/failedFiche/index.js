@@ -11,7 +11,6 @@ export const validateGetRequest = (request) => {
 
   const ids = searchParams.getAll("id");
   const download = searchParams.get("download");
-  const getFile = searchParams.get("getFile");
 
   const invalidIds = ids.filter((id) => !isUUID(id, 4));
   if (invalidIds.length > 0) {
@@ -30,25 +29,7 @@ export const validateGetRequest = (request) => {
     };
   }
 
-  if (getFile !== null && getFile !== "true") {
-    return {
-      success: false,
-      data: [],
-      message: `Bad request: 'getFile' must be "true" or unset.`,
-    };
-  }
-
-  if (getFile && ids.length !== 1) {
-    return {
-      valid: false,
-      message: "Bad request: a single 'id' required with 'getFile'",
-    };
-  }
-
-  return {
-    success: true,
-    data: { ids, download, getFile },
-  };
+  return { success: true, data: { ids, download } };
 };
 
 export const createFileBuffer = async (fiches) => {
