@@ -4,50 +4,30 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getFailedFicheOwnerId = async (id) => {
-  try {
-    const query = `
-        SELECT u.user_id as "ownerId"
-        FROM failed_fiche f
-        JOIN upload u ON f.upload_id = u.id
-        WHERE f.id = $1;
-        `;
-    const values = [id];
+export const getFailedFiches = async (ids, userId) => {
+  const clauses = [];
+  const values = [];
 
-    const { rows, rowCount } = await pool.query(query, values);
-
-    if (!rowCount) return null;
-
-    const { ownerId } = rows[0];
-    return ownerId;
-  } catch {
-    return null;
+  if (ids.length) {
+    values.push(ids);
+    clauses.push(`ff.id = ANY($${values.length})`);
   }
-};
-
-export const updateFicheById = async (id, update) => {
-  try {
-    const keys = Object.keys(update);
-    if (keys.length === 0) return false;
-
-    const setClauses = keys.map((key, index) => `"${key}" = $${index + 1}`);
-
-    const query = `
-        UPDATE fiche
-        SET ${setClauses.join(", ")}
-        WHERE id = $${keys.length + 1}
-        RETURNING id;
-        `;
-    const values = keys.map((key) => update[key]);
-
-    const { rowCount } = await pool.query(query, [...values, id]);
-
-    if (!rowCount) return null;
-
-    return id;
-  } catch (error) {
-    return null;
+  if (userId) {
+    values.push(userId);
+    clauses.push(`up.user_id = $${values.length}`);
   }
+
+  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
+
+  const query = `
+      SELECT ff.*
+      FROM failed_fiche ff
+      LEFT JOIN upload up ON ff.upload_id = up.id
+      ${whereQuery}
+    `;
+
+  const { rows } = await pool.query(query, values);
+  return rows;
 };
 
 export const deleteFicheById = async (id) => {

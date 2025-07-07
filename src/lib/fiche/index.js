@@ -88,10 +88,9 @@ export const getFiches = async (ids, isUser) => {
   const clauses = [];
   const values = [];
 
-  if (ids.length) {
-    values.push(ids);
-    clauses.push(`f.id = ANY($${values.length})`);
-  }
+  values.push(ids);
+  clauses.push(`f.id = ANY($${values.length})`);
+
   if (isUser) {
     values.push(isUser.userId);
     clauses.push(`us.id = $${values.length}`);
@@ -122,18 +121,6 @@ export const getFiches = async (ids, isUser) => {
   const { rows } = await pool.query(query, values);
 
   return rows;
-};
-
-export const getFichePathById = async (id) => {
-  const query = `SELECT path FROM fiche WHERE id = $1`;
-  const values = [id];
-
-  const { rows, rowCount } = await pool.query(query, values);
-
-  if (!rowCount) return null;
-
-  const { path } = rows[0];
-  return path;
 };
 
 export const getFiche = async (id) => {

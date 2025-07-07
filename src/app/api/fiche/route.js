@@ -16,10 +16,8 @@ import {
 
 export const GET = async (request) => {
   try {
-    // Get user
     const { id: userId, role, permissions = [] } = await getUser();
 
-    // Check permissions
     const hasAccess = permissions.includes("CAN_GET_FICHES");
     if (!hasAccess) {
       return NextResponse.json(
@@ -38,6 +36,16 @@ export const GET = async (request) => {
 
     if (download) {
       const fiches = await getFiches(ids, isUser);
+      if (!fiches.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            data: [],
+            message: "Not found: No fiche founded for downloading",
+          },
+          { status: 404 }
+        );
+      }
       const { fileBuffer, fileName } = await createFileBuffer(fiches);
       return new NextResponse(fileBuffer, {
         headers: {
@@ -50,13 +58,11 @@ export const GET = async (request) => {
     }
 
     const fiches = await getFichesForConsumption(ids, isUser);
-
     return NextResponse.json(
       { success: true, data: fiches, message: null },
       { status: 200 }
     );
-  } catch (error) {
-    console.log(error);
+  } catch {
     return NextResponse.json(
       { success: false, data: [], message: "Internal Server Error" },
       { status: 500 }
@@ -66,7 +72,6 @@ export const GET = async (request) => {
 
 export const PUT = async (request) => {
   try {
-    // Get user
     const { id: userId, permissions = [] } = await getUser();
     if (!userId) {
       return NextResponse.json(
@@ -79,7 +84,6 @@ export const PUT = async (request) => {
       );
     }
 
-    // Check permissions
     const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_FICHES");
     const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_FICHES");
     if (!hasAllAccess && !hasOwnAccess) {
@@ -89,7 +93,6 @@ export const PUT = async (request) => {
       );
     }
 
-    // Validate the request
     const validationResult = await validatePutRequest(request);
     if (!validationResult.valid) {
       return NextResponse.json(
@@ -213,7 +216,6 @@ export const PUT = async (request) => {
 
 export const DELETE = async (request) => {
   try {
-    // Get user
     const { id: userId, permissions = [] } = await getUser();
     if (!userId) {
       return NextResponse.json(
@@ -226,7 +228,6 @@ export const DELETE = async (request) => {
       );
     }
 
-    // Check permissions
     const hasAllAccess = permissions.includes("CAN_DELETE_ALL_FICHES");
     const hasOwnAccess = permissions.includes("CAN_DELETE_OWN_FICHES");
     if (!hasAllAccess && !hasOwnAccess) {
@@ -236,7 +237,6 @@ export const DELETE = async (request) => {
       );
     }
 
-    // Validate the request
     const validationResult = validateDeleteRequest(request);
     if (!validationResult.valid) {
       return NextResponse.json(

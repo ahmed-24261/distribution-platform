@@ -141,6 +141,7 @@ CREATE TABLE
 		source_id UUID REFERENCES source (id) ON DELETE CASCADE,
 		date TIMESTAMP DEFAULT now (),
 		created_by TEXT,
+		file_name TEXT,
 		path TEXT UNIQUE,
 		hash VARCHAR(64) UNIQUE,
 		upload_id UUID NOT NULL REFERENCES upload (id) ON DELETE CASCADE,

@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
-import {
-  getFailedFiches,
-  getFailedFiche,
-  deleteFailedFiche,
-} from "@/lib/failedFiche";
+import { getFailedFiches } from "@/lib/failedFiche";
 import { validateGetRequest, createFileBuffer, validateDeleteRequest } from ".";
 
 export const GET = async (request) => {
   try {
-    // Get user
-    const { id: userId, role, permissions = [] } = await getUser();
+    const { id: userId, permissions = [] } = await getUser();
 
-    // Check permissions
-    const hasAccess = permissions.includes("CAN_GET_FAILED_FICHES");
-    if (!hasAccess) {
+    const hasAllAccess = permissions.includes("CAN_GET_ALL_UPLOADS");
+    const hasOwnAccess = permissions.includes("CAN_GET_OWN_UPLOADS");
+    if (!hasAllAccess && !hasOwnAccess) {
       return NextResponse.json(
-        { success: false, data: [], message: "Forbidden: no GET access" },
+        { success: false, data: [], message: "Forbidden: no Get access" },
         { status: 403 }
       );
     }
@@ -28,8 +23,19 @@ export const GET = async (request) => {
 
     const { ids, download } = data;
 
+    const ownerId = !hasAllAccess ? userId : null;
     if (download) {
-      const fiches = await getFailedFiches(ids);
+      const fiches = await getFailedFiches(ids, ownerId);
+      if (!fiches.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            data: [],
+            message: "Not found: No failed fiche founded for downloading",
+          },
+          { status: 404 }
+        );
+      }
       const { fileBuffer, fileName } = await createFileBuffer(fiches);
       return new NextResponse(fileBuffer, {
         headers: {
@@ -41,10 +47,8 @@ export const GET = async (request) => {
       });
     }
 
-    const fiches = await getFichesForConsumption(ids, isUser);
-
     return NextResponse.json(
-      { success: true, data: fiches, message: null },
+      { success: true, data: [], message: null },
       { status: 200 }
     );
   } catch (error) {
@@ -96,7 +100,7 @@ export const DELETE = async (request) => {
     const errors = [];
 
     for (const id of ids) {
-      const getResponse = await getFiche(id);
+      const getResponse = await getFailedFiche(id);
       if (getResponse.error) {
         errors.push({
           id,

@@ -34,84 +34,26 @@ export const validateGetRequest = (request) => {
 
 export const createFileBuffer = async (fiches) => {
   if (fiches.length === 1) {
-    const zip = new JSZip();
-    const { path: filePath, documents } = fiches[0];
+    const { path: filePath, file_name: fileName } = fiches[0];
 
     const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
     const fileBuffer = await fs.readFile(absFilePath);
-    const fileName = path.basename(filePath);
-    zip.file(fileName, fileBuffer);
 
-    const folderName = path.basename(path.dirname(filePath));
-
-    for (const document of documents) {
-      const { path: filePath } = document;
+    return { fileBuffer, fileName };
+  } else {
+    const zip = new JSZip();
+    for (const { path: filePath } of fiches) {
       const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
       const fileBuffer = await fs.readFile(absFilePath);
+
       const fileName = path.basename(filePath);
+
       zip.file(fileName, fileBuffer);
     }
 
     const zipContent = await zip.generateAsync({ type: "nodebuffer" });
 
-    return { fileBuffer: zipContent, fileName: `${folderName}.zip` };
-  } else {
-    const zip = new JSZip();
-    for (const { path: filePath, documents } of fiches) {
-      const folderName = path.basename(path.dirname(filePath));
-
-      const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
-      const fileBuffer = await fs.readFile(absFilePath);
-      const fileName = path.basename(filePath);
-      zip.file(path.join(folderName, fileName), fileBuffer);
-
-      for (const document of documents) {
-        const { path: filePath } = document;
-        const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
-        const fileBuffer = await fs.readFile(absFilePath);
-        const fileName = path.basename(filePath);
-        zip.file(path.join(folderName, fileName), fileBuffer);
-      }
-    }
-
-    const zipContent = await zip.generateAsync({ type: "nodebuffer" });
-
-    return { fileBuffer: zipContent, fileName: "fiches.zip" };
-  }
-};
-
-// --- PUT request
-export const validatePutRequest = async (request) => {
-  const jsonData = await request.json();
-
-  const items = Array.isArray(jsonData) ? jsonData : [jsonData];
-
-  for (const item of items) {
-    const id = item?.id;
-    const update = item?.update;
-
-    if (!id) {
-      return {
-        valid: false,
-        message: "Bad request: 'id' required",
-      };
-    }
-
-    if (!validate(id, 4)) {
-      return {
-        valid: false,
-        message: "Bad request: 'id' must be valid UUIDv4 string",
-      };
-    }
-
-    if (!update) {
-      return {
-        valid: false,
-        message: "Bad request: 'update' required",
-      };
-    }
-
-    return { valid: true, data: { items } };
+    return { fileBuffer: zipContent, fileName: "fiches échouées.zip" };
   }
 };
 

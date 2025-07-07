@@ -156,9 +156,19 @@ const ConsultUpload = ({ params }) => {
   const handleDownloadBulk = async () => {
     try {
       const ficheIds = selectedItems.fiches;
-      const queryParams = ficheIds.map((id) => `id=${id}`).join("&");
+      const failedFicheIds = selectedItems.failedFiches;
 
-      const request = `/api/fiche?${queryParams}&download=true`;
+      if (ficheIds.length === 0 && failedFicheIds.length === 0) {
+        toast.error("Aucune fiche sélectionnée pour le téléchargement");
+        return;
+      }
+
+      const ids = ficheIds.length ? ficheIds : failedFicheIds;
+      const ficheType = ficheIds.length ? "fiche" : "failedFiche";
+
+      const paramsQuery = ids.map((id) => `id=${id}`).join("&");
+
+      const request = `/api/${ficheType}?${paramsQuery}&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
@@ -569,22 +579,6 @@ const ConsultUpload = ({ params }) => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleDeleteBulk()}
-                disabled={selectedCount === 0}
-              >
-                <Trash2 className="h-4 w-4 text-red-500" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Supprimer la sélection</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={() => handleReportBulk()}
                 disabled={selectedCount === 0}
               >
@@ -593,6 +587,22 @@ const ConsultUpload = ({ params }) => {
             </TooltipTrigger>
             <TooltipContent>
               <p>Signaler la sélection</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeleteBulk()}
+                disabled={selectedCount === 0}
+              >
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Supprimer la sélection</p>
             </TooltipContent>
           </Tooltip>
 
