@@ -57,6 +57,22 @@ export const GET = async (request) => {
       });
     }
 
+    if (getFile) {
+      fiches = await getFiches(ids, isUser);
+      if (!fiches.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            data: [],
+            message: "Not found: No fiche founded for downloading",
+          },
+          { status: 404 }
+        );
+      }
+
+      const { path } = fiches[0];
+    }
+
     const fiches = await getFichesForConsumption(ids, isUser);
     return NextResponse.json(
       { success: true, data: fiches, message: null },
