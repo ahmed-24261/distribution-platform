@@ -4,6 +4,140 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
+export const getUploadsWhere = async (where) => {
+  const values = [];
+  const clauses = [];
+
+  Object.entries(where).forEach(([table, attributes]) => {
+    Object.entries(attributes).forEach(([attribute, value]) => {
+      values.push(value);
+      if (Array.isArray(value)) {
+        clauses.push(`${table}.${attribute} = ANY($${values.length})`);
+      } else {
+        clauses.push(`${table}.${attribute} = $${values.length}`);
+      }
+    });
+  });
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+
+  const query = `
+      SELECT
+        uploads.id,
+        uploads.display_name AS "displayName",
+        uploads.date,
+        uploads.type,
+        uploads.status,
+        uploads.file_name AS "fileName",
+        users.username AS "user",
+        (
+          SELECT COALESCE(
+            JSON_AGG(
+              jsonb_build_object(
+                'id', f.id,
+                'ref', f.ref,
+                'source', s.name,
+                'date', f.date,
+                'dateDistribute', f.date_distribute,
+                'status', f.status
+              )
+              ORDER BY f.ref
+            ),
+            '[]'
+          )
+          FROM fiches f
+          LEFT JOIN sources s ON f.source_id = s.id
+          WHERE f.upload_id = uploads.id
+        ) AS fiches,
+        (
+          SELECT COALESCE(
+            JSON_AGG(
+              jsonb_build_object(
+                'id', ff.id,
+                'source', s.name,
+                'date', ff.date
+              )
+              ORDER BY ff.id
+            ),
+            '[]'
+          )
+          FROM failed_fiches ff
+          LEFT JOIN sources s ON ff.source_id = s.id
+          WHERE ff.upload_id = uploads.id
+        ) AS "failedFiches"
+
+      FROM uploads
+      LEFT JOIN users ON uploads.user_id = users.id
+      ${whereClause}
+      GROUP BY uploads.id, users.username
+      ORDER BY uploads.date DESC;
+    `;
+
+  const { rows } = await pool.query(query, values);
+  return rows;
+};
+
+export const countUploadsByDisplayName = async (displayName) => {
+  const query = `
+    SELECT id
+    FROM uploads
+    WHERE display_name LIKE $1
+  `;
+  const values = [`${displayName}%`];
+
+  const { rowCount } = await pool.query(query, values);
+  return rowCount;
+};
+
+export const getUploadByHash = async (file_hash) => {
+  const query = `
+    SELECT *
+    FROM uploads
+    WHERE file_hash = $1
+  `;
+  const values = [file_hash];
+
+  const { rows, rowCount } = await pool.query(query, values);
+
+  if (!rowCount) return null;
+  return rows[0];
+};
+
+export const createUpload = async (data, buffer) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const query = `
+      INSERT INTO uploads (${Object.keys(data).join(", ")}) 
+      values (${Object.keys(data)
+        .map((_, i) => `$${i + 1}`)
+        .join(", ")}) 
+      RETURNING *`;
+
+    const values = Object.values(data);
+
+    const { rows, rowCount } = await client.query(query, values);
+
+    if (!rowCount) return null;
+
+    const absPath = path.join(FILE_STORAGE_PATH, data.file_path);
+    const dirPath = path.dirname(absPath);
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(absPath, buffer);
+
+    await client.query("COMMIT");
+    client.release();
+
+    return rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    client.release();
+    throw error;
+  }
+};
+
 export const getUploadsForConsumption = async (ids, userId) => {
   const clauses = [];
   const values = [];
@@ -75,6 +209,20 @@ export const getUploadsForConsumption = async (ids, userId) => {
   return rows;
 };
 
+export const getUploadById = async (id) => {
+  const query = `
+    SELECT *
+    FROM uploads
+    WHERE id = $1
+  `;
+  const values = [id];
+
+  const { rows, rowCount } = await pool.query(query, values);
+
+  if (!rowCount) return null;
+  return rows[0];
+};
+
 export const getUploads = async (ids, userId) => {
   const clauses = [];
   const values = [];
@@ -98,92 +246,6 @@ export const getUploads = async (ids, userId) => {
 
   const { rows } = await pool.query(query, values);
   return rows;
-};
-
-export const countUploadsWhereDisplayNameLike = async (displayName) => {
-  const query = `
-    SELECT id
-    FROM upload
-    WHERE display_name LIKE $1
-  `;
-  const values = [`${displayName}%`];
-
-  const { rowCount } = await pool.query(query, values);
-  return rowCount;
-};
-
-export const getUploadById = async (id) => {
-  const query = `
-    SELECT *
-    FROM upload
-    WHERE id = $1
-  `;
-  const values = [id];
-
-  const { rows, rowCount } = await pool.query(query, values);
-
-  if (!rowCount) return null;
-  return rows[0];
-};
-
-export const getUploadByHash = async (hash) => {
-  const query = `
-    SELECT id
-    FROM upload
-    WHERE hash = $1
-  `;
-  const values = [hash];
-
-  const { rows, rowCount } = await pool.query(query, values);
-
-  if (!rowCount) return null;
-  return rows[0];
-};
-
-export const createUpload = async (uploadData, fileData) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const query = `
-      INSERT INTO upload
-      (user_id, display_name, date, type, file_name, path, hash)
-      values
-      ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id`;
-
-    const {
-      userId,
-      displayName,
-      date,
-      type,
-      fileName,
-      path: filePath,
-      hash,
-    } = uploadData;
-    const values = [userId, displayName, date, type, fileName, filePath, hash];
-
-    const { rows, rowCount } = await client.query(query, values);
-
-    if (!rowCount) {
-      throw new Error("Record didn't created");
-    }
-
-    const absPath = path.join(FILE_STORAGE_PATH, filePath);
-    const absDirPath = path.dirname(absPath);
-    await fs.mkdir(absDirPath, { recursive: true });
-    await fs.writeFile(absPath, fileData);
-
-    await client.query("COMMIT");
-    client.release();
-
-    return rows[0];
-  } catch (error) {
-    await client.query("ROLLBACK");
-    client.release();
-    throw error;
-  }
 };
 
 export const deleteUpload = async (id) => {

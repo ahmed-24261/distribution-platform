@@ -16,6 +16,12 @@ import {
 
 export const GET = async (request) => {
   try {
+    // Validate the request parameters
+    const { success, data, message } = validateGetRequest(request);
+    if (!success) {
+      return NextResponse.json({ success, data, message }, { status: 400 });
+    }
+
     const { id: userId, role, permissions = [] } = await getUser();
 
     const hasAccess = permissions.includes("CAN_GET_FICHES");
@@ -24,11 +30,6 @@ export const GET = async (request) => {
         { success: false, data: [], message: "Forbidden: no GET access" },
         { status: 403 }
       );
-    }
-
-    const { success, data, message } = validateGetRequest(request);
-    if (!success) {
-      return NextResponse.json({ success, data, message }, { status: 400 });
     }
 
     const { ids, download, getFile } = data;

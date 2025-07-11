@@ -10,8 +10,6 @@ export const validateGetRequest = (request) => {
   const { searchParams } = new URL(request.url);
 
   const ids = searchParams.getAll("id");
-  const download = searchParams.get("download");
-  const getFile = searchParams.get("getFile");
 
   const invalidIds = ids.filter((id) => !isUUID(id, 4));
   if (invalidIds.length > 0) {
@@ -27,22 +25,6 @@ export const validateGetRequest = (request) => {
       success: false,
       data: [],
       message: `Bad request: 'download' must be "true" or unset.`,
-    };
-  }
-
-  if (getFile !== null && getFile !== "true") {
-    return {
-      success: false,
-      data: [],
-      message: `Bad request: 'getFile' must be "true" or unset.`,
-    };
-  }
-
-  if (getFile && ids.length !== 1) {
-    return {
-      success: false,
-      data: [],
-      message: "Bad request: a single 'id' required with 'getFile'",
     };
   }
 

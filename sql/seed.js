@@ -18,7 +18,7 @@ async function seed() {
     consoleLog("🌱 Seeding database...", "magenta");
 
     // Reset the database
-    const resetQueries = `TRUNCATE TABLE observations, failed_fiche, group_source, document, fiche, source, upload, user_permission, permission, "user", "group" CASCADE;`;
+    const resetQueries = `TRUNCATE TABLE observations, failed_fiches, groups_sources, documents, fiches, sources, uploads, users_permissions, permissions, users, groups CASCADE;`;
     await pool.query(resetQueries);
 
     // insert sources
@@ -27,7 +27,7 @@ async function seed() {
       { name: "fruits", description: "fruits source" },
       { name: "locations", description: "locations source" },
     ];
-    const sourceQueries = `INSERT INTO source (name, description) VALUES ${sources
+    const sourceQueries = `INSERT INTO sources (name, description) VALUES ${sources
       .map((resource) => `('${resource.name}', '${resource.description}')`)
       .join(", ")} RETURNING id;`;
 
@@ -45,7 +45,7 @@ async function seed() {
       { name: "group-fruits", description: "group for fruits" },
       { name: "group-all", description: "group for all" },
     ];
-    const groupQueries = `INSERT INTO "group" (name, description) VALUES ${groups
+    const groupQueries = `INSERT INTO groups (name, description) VALUES ${groups
       .map((resource) => `('${resource.name}', '${resource.description}')`)
       .join(", ")} RETURNING id;`;
 
@@ -68,7 +68,7 @@ async function seed() {
       { groupId: group3, sourceId: source3 },
     ];
 
-    const groupSourceQueries = `INSERT INTO group_source (group_id, source_id) VALUES ${groupSource
+    const groupSourceQueries = `INSERT INTO groups_sources (group_id, source_id) VALUES ${groupSource
       .map((gs) => `('${gs.groupId}', '${gs.sourceId}')`)
       .join(", ")} RETURNING *;`;
 
@@ -109,7 +109,7 @@ async function seed() {
         description: "can download own fiches",
       },
     ];
-    const permissionQueries = `INSERT INTO permission (name, description) VALUES ${permissions
+    const permissionQueries = `INSERT INTO permissions (name, description) VALUES ${permissions
       .map((resource) => `('${resource.name}', '${resource.description}')`)
       .join(", ")} RETURNING id;`;
 
@@ -150,7 +150,7 @@ async function seed() {
       { username: "admin4", password: "AdminPass4!", role: "admin" },
     ];
 
-    const adminQueries = `INSERT INTO "user" (username, password, role) VALUES ${admins
+    const adminQueries = `INSERT INTO users (username, password, role) VALUES ${admins
       .map(
         (resource) =>
           `('${resource.username}', '${hashFunction(resource.password)}', '${
@@ -206,7 +206,7 @@ async function seed() {
       },
     ];
 
-    const userQueries = `INSERT INTO "user" (username, password, role, group_id) VALUES ${users
+    const userQueries = `INSERT INTO  users (username, password, role, group_id) VALUES ${users
       .map(
         (resource) =>
           `('${resource.username}', '${hashFunction(resource.password)}', '${
@@ -285,7 +285,7 @@ async function seed() {
       { userId: user5, permissionId: canGetFiches },
     ];
 
-    const userPermissionQueries = `INSERT INTO user_permission (user_id, permission_id) VALUES ${userPermission
+    const userPermissionQueries = `INSERT INTO users_permissions (user_id, permission_id) VALUES ${userPermission
       .map((up) => `('${up.userId}', '${up.permissionId}')`)
       .join(", ")} RETURNING *;`;
 
@@ -340,7 +340,7 @@ async function seed() {
       },
     ];
 
-    const uploadQueries = `INSERT INTO upload (user_id, display_name, type, date, file_name, path, hash) VALUES ${uploads
+    const uploadQueries = `INSERT INTO uploads (user_id, display_name, type, date, file_name, file_path, file_hash) VALUES ${uploads
       .map(
         (resource) =>
           `('${resource.userId}', '${resource.displayName}', '${resource.type}', '${resource.date}', '${resource.fileName}', '${resource.path}', '${resource.hash}')`

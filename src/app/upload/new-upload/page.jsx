@@ -3,7 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FileUpload from "@/components/upload/newUpload/FileUpload";
 import FormUpload from "@/components/upload/newUpload/FormUpload";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const NewUpload = () => {
   const [activeTab, setActiveTab] = useState("file");

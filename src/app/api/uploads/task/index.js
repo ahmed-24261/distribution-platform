@@ -1,9 +1,10 @@
 import { validate as isUUID } from "uuid";
 
-export const validatePostRequest = async (request) => {
-  const { id, task } = await request.json();
+export const validateGETRequest = (request) => {
+  const { searchParams } = new URL(request.url);
 
-  const validTasks = ["process"];
+  const id = searchParams.getAll("id");
+  const task = searchParams.getAll("task");
 
   if (!id) {
     return {
@@ -26,14 +27,6 @@ export const validatePostRequest = async (request) => {
       success: false,
       data: null,
       message: "Bad request: 'id' must be a valid UUID",
-    };
-  }
-
-  if (!validTasks.includes(task)) {
-    return {
-      success: false,
-      data: null,
-      message: "Bad request: 'task' invalid",
     };
   }
 

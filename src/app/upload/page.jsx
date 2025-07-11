@@ -30,7 +30,7 @@ const UploadHistory = () => {
 
   const fetchData = async () => {
     try {
-      const response = await fetch("api/upload");
+      const response = await fetch("api/uploads");
       const { success, data, message } = await response.json();
       if (success) {
         setUploads(data);
@@ -170,7 +170,7 @@ const UploadHistory = () => {
                     <TableCell className="font-medium">
                       {upload.displayName}
                     </TableCell>
-                    <TableCell>{upload.username}</TableCell>
+                    <TableCell>{upload.user}</TableCell>
 
                     <TableCell>
                       <div className="flex">

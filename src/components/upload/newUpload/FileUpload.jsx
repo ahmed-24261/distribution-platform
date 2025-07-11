@@ -46,7 +46,7 @@ const FileUpload = () => {
     formData.append("type", "file");
     formData.append("file", file);
 
-    const response = await fetch("/api/upload", {
+    const response = await fetch("/api/uploads", {
       method: "POST",
       body: formData,
     });

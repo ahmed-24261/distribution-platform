@@ -1,10 +1,8 @@
-import fs from "fs/promises";
 import path from "path";
-import JSZip from "jszip";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
 import { validate as isUUID } from "uuid";
-import { countUploadsWhereDisplayNameLike } from "@/lib/upload";
+import { countUploadsByDisplayName } from "@/lib/uploads";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
@@ -13,10 +11,9 @@ export const validateGetRequest = (request) => {
   const { searchParams } = new URL(request.url);
 
   const ids = searchParams.getAll("id");
-  const download = searchParams.get("download");
 
-  const invalidIds = ids.filter((id) => !isUUID(id, 4));
-  if (invalidIds.length > 0) {
+  const countInvalidIds = ids.filter((id) => !isUUID(id, 4)).length;
+  if (countInvalidIds) {
     return {
       success: false,
       data: [],
@@ -24,51 +21,10 @@ export const validateGetRequest = (request) => {
     };
   }
 
-  if (download !== null && download !== "true") {
-    return {
-      success: false,
-      data: [],
-      message: `Bad request: 'download' must be "true" or unset.`,
-    };
-  }
-
   return {
     success: true,
-    data: { ids, download },
+    data: { ids },
   };
-};
-
-export const createFileBuffer = async (uploads) => {
-  if (uploads.length === 1) {
-    const { path: filePath, file_name: fileName } = uploads[0];
-
-    const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
-    const fileBuffer = await fs.readFile(absFilePath);
-
-    return { fileBuffer, fileName };
-  } else {
-    const zip = new JSZip();
-    const fileNames = [];
-    for (const { path: filePath, file_name: fileName } of uploads) {
-      const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
-      const fileData = fs.readFile(absFilePath);
-
-      let uniqueFileName;
-      if (fileNames.includes(fileName)) {
-        const { ext, name } = path.parse(fileName);
-        uniqueFileName = `${name}(1)${ext}`;
-      } else {
-        uniqueFileName = fileName;
-      }
-
-      zip.file(uniqueFileName, fileData);
-      fileNames.push(uniqueFileName);
-    }
-
-    const zipContent = await zip.generateAsync({ type: "nodebuffer" });
-
-    return { fileBuffer: zipContent, fileName: "uploads.zip" };
-  }
 };
 
 // --- Post request
@@ -163,8 +119,8 @@ export const validatePostRequest = async (request) => {
 };
 
 export const constructUploadData = async (formData, userId) => {
-  const uploadData = {};
-  let fileData;
+  const data = {};
+  let buffer;
 
   const type = formData.get("type");
 
@@ -173,16 +129,16 @@ export const constructUploadData = async (formData, userId) => {
   const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
   const formatDateForPath = formatDate.toFormat("yyyyMMdd");
 
-  const count = await countUploadsWhereDisplayNameLike(formatDateForName);
+  const count = await countUploadsByDisplayName(formatDateForName);
   const rank = count + 1;
 
   const dirPath = path.join("data", "uploads", formatDateForPath);
   const displayName = `${formatDateForName}-${type}-${rank}`;
 
-  uploadData.userId = userId;
-  uploadData.type = type;
-  uploadData.date = date.toISOString();
-  uploadData.displayName = displayName;
+  data.user_id = userId;
+  data.date = date.toISOString();
+  data.display_name = displayName;
+  data.type = type;
 
   if (type === "file" || type === "api") {
     const file = formData.get("file");
@@ -190,11 +146,12 @@ export const constructUploadData = async (formData, userId) => {
     const fileName = file.name;
     const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
 
-    uploadData.fileName = fileName;
-    uploadData.path = filePath;
+    buffer = Buffer.from(await file.arrayBuffer());
+    const fileHash = calculateFileHash(buffer);
 
-    fileData = Buffer.from(await file.arrayBuffer());
-    uploadData.hash = calculateFileHash(fileData);
+    data.file_name = fileName;
+    data.file_path = filePath;
+    data.file_hash = fileHash;
   } else {
     const source = formData.get("source");
     const object = formData.get("object");
@@ -204,7 +161,7 @@ export const constructUploadData = async (formData, userId) => {
     let dump = formData.get("dump");
 
     // construct data.json and fiche.docx
-    // create a zipFile as fileData
+    // create a zipFile as buffer
     // calculate hash of the zipFile
     // suggest a fileName and path
 
@@ -212,7 +169,7 @@ export const constructUploadData = async (formData, userId) => {
     const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
   }
 
-  return { uploadData, fileData };
+  return { data, buffer };
 };
 
 // --- DELETE request
