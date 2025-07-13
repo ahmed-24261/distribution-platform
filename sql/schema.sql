@@ -114,7 +114,7 @@ CREATE TABLE
 CREATE TABLE
 	documents (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
-		document_type document_type NOT NULL,
+		type document_type NOT NULL,
 		fiche_id UUID REFERENCES fiches (id) ON DELETE CASCADE,
 		file_name TEXT NOT NULL,
 		file_path TEXT NOT NULL UNIQUE,

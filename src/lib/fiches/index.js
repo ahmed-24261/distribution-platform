@@ -4,32 +4,35 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getFichesForConsumption = async (ids, isUser) => {
-  const clauses = [];
+export const getFichesWhere = async (where) => {
   const values = [];
 
-  if (ids.length) {
-    values.push(ids);
-    clauses.push(`f.id = ANY($${values.length})`);
-  }
-  if (isUser) {
-    values.push(isUser.userId);
-    clauses.push(`us.id = $${values.length}`);
-  }
+  const clauses = [];
 
-  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
+  Object.entries(where).forEach(([table, attributes]) => {
+    Object.entries(attributes).forEach(([attribute, value]) => {
+      values.push(value);
+      if (Array.isArray(value)) {
+        clauses.push(`${table}.${attribute} = ANY($${values.length})`);
+      } else {
+        clauses.push(`${table}.${attribute} = $${values.length}`);
+      }
+    });
+  });
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 
   const query = `
       SELECT 
-        f.id,
-        f.ref,
-        s.name AS source,
-        f.date,
-        f.object,
-        f.summary,
-        f.created_by AS "createdBy",
-        f.dump,
-        f.status,
+        fiches.id,
+        fiches.ref,
+        sources.name AS source,
+        fiches.date,
+        fiches.object,
+        fiches.summary,
+        fiches.created_by AS "createdBy",
+        fiches.dump,
+        fiches.status,
         (
           SELECT COALESCE(
             JSON_AGG(
@@ -42,9 +45,9 @@ export const getFichesForConsumption = async (ids, isUser) => {
             ),
             '[]'
           )
-          FROM document d
-          LEFT JOIN fiche ON d.fiche_id = fiche.id
-          WHERE fiche.id = f.id
+          FROM documents d
+          LEFT JOIN fiches f ON d.fiche_id = f.id
+          WHERE f.id = fiches.id
         ) AS documents,
         (
           SELECT COALESCE(
@@ -63,20 +66,22 @@ export const getFichesForConsumption = async (ids, isUser) => {
             ),
             '[]'
           )
-          FROM fiche f1
-          LEFT JOIN observations o ON o.observation = f1.id
-          LEFT JOIN fiche f2 ON o.fiche_id = f2.id
-          WHERE f2.id = f.id ${isUser ? "AND f1.status = 'valid'" : ""}
+          FROM fiches f1
+          LEFT JOIN observations o ON o.observation_id = f1.id
+          LEFT JOIN fiches f2 ON o.fiche_id = f2.id
+          WHERE f2.id = fiches.id ${
+            where.fiches.status ? "AND f1.status = 'valid'" : ""
+          }
         ) AS observations
 
-      FROM fiche f
-      JOIN group_source gs ON f.source_id = gs.source_id
-      JOIN "user" us ON gs.group_id = us.group_id
-      JOIN source s ON s.id = f.source_id
-      JOIN document d ON d.fiche_id = f.id
-      ${whereQuery} ${isUser ? "AND f.status = 'valid'" : ""}
-      GROUP BY f.id, s.name
-      ORDER BY f.date DESC;
+      FROM fiches
+      JOIN groups_sources gs ON fiches.source_id = gs.source_id
+      JOIN users ON gs.group_id = users.group_id
+      JOIN sources ON sources.id = fiches.source_id
+      JOIN documents ON documents.fiche_id = fiches.id
+      ${whereClause}
+      GROUP BY fiches.id, sources.name
+      ORDER BY fiches.date DESC;
     `;
 
   const { rows } = await pool.query(query, values);

@@ -265,7 +265,6 @@ async function seed() {
       { userId: admin2, permissionId: canDeleteOwnUploads },
       { userId: admin2, permissionId: canDownloadOwnUploads },
       { userId: admin2, permissionId: canDownloadOwnFiches },
-
       { userId: admin2, permissionId: canDeleteOwnFiches },
       { userId: admin2, permissionId: canUpdateOwnFiches },
 

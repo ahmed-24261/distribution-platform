@@ -1,38 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
-import { validate as isUUID } from "uuid";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
-
-// --- GET request
-export const validateGetRequest = (request) => {
-  const { searchParams } = new URL(request.url);
-
-  const ids = searchParams.getAll("id");
-
-  const invalidIds = ids.filter((id) => !isUUID(id, 4));
-  if (invalidIds.length > 0) {
-    return {
-      success: false,
-      data: [],
-      message: "Bad request: 'id' must be a valid UUID",
-    };
-  }
-
-  if (download !== null && download !== "true") {
-    return {
-      success: false,
-      data: [],
-      message: `Bad request: 'download' must be "true" or unset.`,
-    };
-  }
-
-  return {
-    success: true,
-    data: { ids, download, getFile },
-  };
-};
 
 export const createFileBuffer = async (fiches) => {
   if (fiches.length === 1) {

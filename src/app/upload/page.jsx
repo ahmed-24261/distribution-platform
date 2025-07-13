@@ -48,13 +48,7 @@ const UploadHistory = () => {
 
   const handleProcess = async (id) => {
     try {
-      const response = await fetch("api/upload/task", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id, task: "process" }),
-      });
+      const response = await fetch(`api/uploads/task?task=process&id=${id}`);
 
       const { success, data, message } = await response.json();
 
@@ -102,7 +96,7 @@ const UploadHistory = () => {
 
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`api/upload?id=${id}`, {
+      const response = await fetch(`api/uploads?id=${id}`, {
         method: "DELETE",
       });
 

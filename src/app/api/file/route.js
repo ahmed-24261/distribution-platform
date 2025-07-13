@@ -21,6 +21,18 @@ export async function GET(request) {
       );
     }
 
+    if (false) {
+      // For downloading files
+      return new NextResponse(fileBuffer, {
+        headers: {
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(
+            fileName
+          )}"`,
+          "Content-Type": "application/zip",
+        },
+      });
+    }
+
     const fileContent = await fs.readFile(fullPath);
 
     const ext = path.extname(fullPath).toLowerCase();

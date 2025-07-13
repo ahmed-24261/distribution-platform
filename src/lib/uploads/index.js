@@ -77,6 +77,18 @@ export const getUploadsWhere = async (where) => {
   return rows;
 };
 
+export const getUploadById = async (id) => {
+  const query = `
+    SELECT *
+    FROM uploads
+    WHERE id = $1
+  `;
+  const values = [id];
+  const { rows, rowCount } = await pool.query(query, values);
+  if (!rowCount) return null;
+  return rows[0];
+};
+
 export const countUploadsByDisplayName = async (displayName) => {
   const query = `
     SELECT id
@@ -89,7 +101,7 @@ export const countUploadsByDisplayName = async (displayName) => {
   return rowCount;
 };
 
-export const getUploadByHash = async (file_hash) => {
+export const getUploadByFileHash = async (file_hash) => {
   const query = `
     SELECT *
     FROM uploads
@@ -138,149 +150,55 @@ export const createUpload = async (data, buffer) => {
   }
 };
 
-export const getUploadsForConsumption = async (ids, userId) => {
-  const clauses = [];
-  const values = [];
-
-  if (ids.length) {
-    values.push(ids);
-    clauses.push(`up.id = ANY($${values.length})`);
-  }
-  if (userId) {
-    values.push(userId);
-    clauses.push(`up.user_id = $${values.length}`);
-  }
-
-  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
-
-  const query = `
-      SELECT 
-        up.id,
-        up.display_name AS "displayName",
-        up.date,
-        up.type,
-        up.status,
-        up.file_name AS "fileName",
-        us.username AS "user",
-        (
-          SELECT COALESCE(
-            JSON_AGG(
-              jsonb_build_object(
-                'id', f.id,
-                'ref', f.ref,
-                'source', s.name,
-                'date', f.date,
-                'dateDistribute', f.date_distribute,
-                'status', f.status
-              )
-              ORDER BY f.ref
-            ),
-            '[]'
-          )
-          FROM fiche f
-          LEFT JOIN source s ON f.source_id = s.id
-          WHERE f.upload_id = up.id
-        ) AS fiches,
-        (
-          SELECT COALESCE(
-            JSON_AGG(
-              jsonb_build_object(
-                'id', ff.id,
-                'source', s.name,
-                'date', ff.date
-              )
-              ORDER BY ff.id
-            ),
-            '[]'
-          )
-          FROM failed_fiche ff
-          LEFT JOIN source s ON ff.source_id = s.id
-          WHERE ff.upload_id = up.id
-        ) AS "failedFiches"
-
-      FROM upload up
-      LEFT JOIN "user" us ON up.user_id = us.id
-      ${whereQuery}
-      GROUP BY up.id, us.username
-      ORDER BY up.date DESC;
-    `;
-
-  const { rows } = await pool.query(query, values);
-  return rows;
-};
-
-export const getUploadById = async (id) => {
-  const query = `
-    SELECT *
-    FROM uploads
-    WHERE id = $1
-  `;
-  const values = [id];
-
-  const { rows, rowCount } = await pool.query(query, values);
-
-  if (!rowCount) return null;
-  return rows[0];
-};
-
-export const getUploads = async (ids, userId) => {
-  const clauses = [];
-  const values = [];
-
-  if (ids.length) {
-    values.push(ids);
-    clauses.push(`up.id = ANY($${values.length})`);
-  }
-  if (userId) {
-    values.push(userId);
-    clauses.push(`up.user_id = $${values.length}`);
-  }
-
-  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
-
-  const query = `
-      SELECT up.*
-      FROM upload up
-      ${whereQuery}
-    `;
-
-  const { rows } = await pool.query(query, values);
-  return rows;
-};
-
-export const deleteUpload = async (id) => {
+export const deleteUploadWhere = async (where) => {
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
+    const values = [];
+    const clauses = [];
+
+    Object.entries(where).forEach(([table, attributes]) => {
+      Object.entries(attributes).forEach(([attribute, value]) => {
+        values.push(value);
+        if (Array.isArray(value)) {
+          clauses.push(`${table}.${attribute} = ANY($${values.length})`);
+        } else {
+          clauses.push(`${table}.${attribute} = $${values.length}`);
+        }
+      });
+    });
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+
     const query = `
-          WITH deleted_upload AS (
-              DELETE FROM upload
-              WHERE id = $1
-              RETURNING id, path
-          )
-          SELECT
-              du.id AS "uploadId",
-              du.path AS "uPath",
-              COALESCE(ARRAY_AGG(DISTINCT f.path) FILTER (WHERE f.id IS NOT NULL), '{}') AS "fichePaths",
-              COALESCE(ARRAY_AGG(DISTINCT ff.path) FILTER (WHERE ff.id IS NOT NULL), '{}') AS "failedFichePaths"
-          FROM
-              deleted_upload du
-              LEFT JOIN fiche f ON f.upload_id = du.id
-              LEFT JOIN failed_fiche ff ON ff.upload_id = du.id
-          GROUP BY
-              du.id, du.path;
-      `;
-    const values = [id];
+      WITH deleted_upload AS 
+        (
+          DELETE FROM uploads
+          ${whereClause}
+          RETURNING *
+        )
+      SELECT
+          du.id,
+          du.file_path,
+          COALESCE(ARRAY_AGG(DISTINCT fiches.file_path) FILTER (WHERE fiches.id IS NOT NULL), '{}') AS "fichePaths",
+          COALESCE(ARRAY_AGG(DISTINCT failed_fiches.file_path) FILTER (WHERE failed_fiches.id IS NOT NULL), '{}') AS "failedFichePaths"
+      FROM
+          deleted_upload du
+          LEFT JOIN fiches ON fiches.upload_id = du.id
+          LEFT JOIN failed_fiches ON failed_fiches.upload_id = du.id
+      GROUP BY
+          du.id, du.file_path;
+  `;
 
     const { rows, rowCount } = await client.query(query, values);
 
     if (!rowCount) return null;
 
-    const { uploadId, uPath, fichePaths, failedFichePaths } = rows[0];
+    const { id, file_path, fichePaths, failedFichePaths } = rows[0];
 
-    await unlinkFile(uPath);
+    await unlinkFile(file_path);
 
     for (const filePath of fichePaths) {
       const productPath = path.dirname(filePath);
@@ -294,7 +212,7 @@ export const deleteUpload = async (id) => {
     await client.query("COMMIT");
     client.release();
 
-    return uploadId;
+    return id;
   } catch (error) {
     await client.query("ROLLBACK");
     client.release();
@@ -306,9 +224,6 @@ const unlinkFile = async (filePath) => {
   const absPath = path.join(FILE_STORAGE_PATH, filePath);
   const absDirPath = path.dirname(absPath);
 
-  console.log(absPath);
-  console.log(absDirPath);
-
   await fs.rm(absPath);
   await fs.rmdir(absDirPath).catch(() => null);
 };
@@ -316,6 +231,7 @@ const unlinkFile = async (filePath) => {
 const rmDirectory = async (dirPath) => {
   const absDirPath = path.join(FILE_STORAGE_PATH, dirPath);
   const absDirDirPath = path.dirname(absDirPath);
+
   await fs.rm(absDirPath, { recursive: true });
   await fs.rmdir(absDirDirPath).catch(() => null);
 };

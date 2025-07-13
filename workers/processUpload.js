@@ -240,7 +240,7 @@ const validateAndConstructData = async (
     }));
 
     const hash = await calculateFileHash(fichePath);
-    const fiche = await getFicheByHash(hash);
+    const fiche = await getFicheByFileHash(hash);
     if (fiche)
       throw new HTTPError(
         "Une fiche identique existe déjà (hash de la fiche déjà enregistré).",
@@ -342,16 +342,16 @@ const validateAndConstructData = async (
     const ref = "ABC-" + Math.floor(100 + Math.random() * 900);
 
     ficheData.ref = ref;
-    ficheData.sourceId = source.id;
+    ficheData.source_id = source.id;
     ficheData.date = date.toISOString();
     ficheData.object = object;
     ficheData.summary = summary;
-    ficheData.hash = hash;
-    ficheData.path = path.join(productPath, path.basename(fichePath));
-    ficheData.uploadId = uploadId;
-    ficheData.dump = dump;
+    ficheData.file_hash = hash;
+    ficheData.file_path = path.join(productPath, path.basename(fichePath));
+    ficheData.upload_id = uploadId;
+    ficheData.dump = { dump_name: dump };
 
-    pathsMapping.push([fichePath, ficheData.path]);
+    pathsMapping.push([fichePath, ficheData.file_path]);
 
     const jsonNewPath = path.join(productPath, path.basename(jsonPath));
     pathsMapping.push([jsonPath, jsonNewPath]);
@@ -374,7 +374,7 @@ const validateAndConstructData = async (
       const { sourcePath, originalPath } = docPaths[index];
 
       const hash = await calculateFileHash(sourcePath);
-      const document = await getDocumentByHash(hash);
+      const document = await getDocumentByFileHash(hash);
       if (document)
         throw new HTTPError(
           `Le document '${file.fileName}' existe déjà (hash du fichier déjà enregistré).`,
@@ -391,14 +391,14 @@ const validateAndConstructData = async (
       } = file;
 
       docData.type = type;
-      docData.fileName = fileName;
-      docData.path = path.join(productPath, path.basename(sourcePath));
-      docData.hash = hash;
+      docData.file_name = fileName;
+      docData.file_path = path.join(productPath, path.basename(sourcePath));
+      docData.file_hash = hash;
       docData.content = content;
       docData.meta = meta;
-      docData.dumpInfo = { dumpName: dump, path: pathInDump };
+      docData.dump = { dump_name: dump, file_path: pathInDump };
 
-      pathsMapping.push([sourcePath, docData.path]);
+      pathsMapping.push([sourcePath, docData.file_path]);
 
       const originalNewPath = path.join(
         productPath,
@@ -410,9 +410,9 @@ const validateAndConstructData = async (
       if (type === "File") {
         const originalHash = await calculateFileHash(originalPath);
         const original = {
-          fileName: originalFileName,
-          path: originalNewPath,
-          hash: originalHash,
+          file_name: originalFileName,
+          file_path: originalNewPath,
+          file_hash: originalHash,
         };
         docData.original = original;
       } else if (type === "Message") {
@@ -452,59 +452,31 @@ const transaction = async (ficheData, docsData, pathsMapping) => {
   try {
     await client.query("BEGIN");
 
-    const ficheQuery = `
-      INSERT INTO fiche
-      (ref, source_id, date, object, summary, path, hash, upload_id, dump)
-      values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    const query = `
+      INSERT INTO fiches (${Object.keys(ficheData).join(", ")}) 
+      values (${Object.keys(ficheData)
+        .map((_, i) => `$${i + 1}`)
+        .join(", ")}) 
       RETURNING id`;
-    const { ref, sourceId, date, object, summary, path, hash, uploadId, dump } =
-      ficheData;
-    const ficheValues = [
-      ref,
-      sourceId,
-      date,
-      object,
-      summary,
-      path,
-      hash,
-      uploadId,
-      dump,
-    ];
 
-    const { rows: ficheRows } = await client.query(ficheQuery, ficheValues);
-    const ficheId = ficheRows[0].id;
+    const values = Object.values(ficheData);
+
+    const { rows } = await client.query(query, values);
+    const ficheId = rows[0].id;
 
     for (const docData of docsData) {
-      const docQuery = `
-      INSERT INTO document
-      (type, fiche_id, file_name, path, hash, content, meta, dump, original, message_id)
-      values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
-      const {
-        type,
-        fileName,
-        path,
-        hash,
-        content,
-        dumpInfo = null,
-        meta = null,
-        original,
-      } = docData;
-      const docValues = [
-        type,
-        ficheId,
-        fileName,
-        path,
-        hash,
-        content,
-        meta,
-        dumpInfo,
-        original,
-        null,
-      ];
+      docData.fiche_id = ficheId;
 
-      await client.query(docQuery, docValues);
+      const query = `
+      INSERT INTO documents (${Object.keys(docData).join(", ")}) 
+      values (${Object.keys(docData)
+        .map((_, i) => `$${i + 1}`)
+        .join(", ")}) 
+      RETURNING id`;
+
+      const values = Object.values(docData);
+
+      await client.query(query, values);
     }
 
     for (const mapping of pathsMapping) {
@@ -543,87 +515,78 @@ const saveFile = async (SourcePath, destinationPath) => {
 
 // DB
 const getUploadById = async (id) => {
-  try {
-    const query = `
+  const query = `
       SELECT *
-      FROM upload
+      FROM uploads
       WHERE id = $1`;
-    const values = [id];
+  const values = [id];
 
-    const { rows } = await pool.query(query, values);
-    return rows[0];
-  } catch (error) {
-    return null;
-  }
+  const { rows, rowCount } = await pool.query(query, values);
+
+  if (!rowCount) return null;
+
+  return rows[0];
 };
 
-const getFicheByHash = async (hash) => {
-  try {
-    const query = `
-    SELECT id
-    FROM fiche
-    WHERE hash = $1
+const getFicheByFileHash = async (file_hash) => {
+  const query = `
+    SELECT *
+    FROM fiches
+    WHERE file_hash = $1
   `;
-    const values = [hash];
+  const values = [file_hash];
 
-    const { rows } = await pool.query(query, values);
+  const { rows, rowCount } = await pool.query(query, values);
 
-    return rows[0] ? rows[0] : null;
-  } catch (error) {
-    throw new Error("Failed to fetch fiche by hash");
-  }
+  if (!rowCount) return null;
+
+  return rows[0];
 };
 
-const getDocumentByHash = async (hash) => {
-  try {
-    const query = `
-    SELECT id
-    FROM document
-    WHERE hash = $1
+const getDocumentByFileHash = async (file_hash) => {
+  const query = `
+    SELECT *
+    FROM documents
+    WHERE file_hash = $1
   `;
-    const values = [hash];
+  const values = [file_hash];
 
-    const { rows } = await pool.query(query, values);
+  const { rows, rowCount } = await pool.query(query, values);
 
-    return rows[0] ? rows[0] : null;
-  } catch (error) {
-    throw new Error("Failed to fetch document by hash");
-  }
+  if (!rowCount) return null;
+
+  return rows[0];
 };
 
 const getSourceByName = async (name) => {
-  try {
-    const query = `
+  const query = `
     SELECT id
-    FROM source
+    FROM sources
     WHERE name = $1
   `;
-    const values = [name];
+  const values = [name];
 
-    const { rows } = await pool.query(query, values);
+  const { rows, rowCount } = await pool.query(query, values);
 
-    return rows[0] ? rows[0] : null;
-  } catch (error) {
-    throw new Error("Failed to fetch source by name");
-  }
+  if (!rowCount) return null;
+
+  return rows[0];
 };
 
 const updateUploadStatusById = async (id, status) => {
-  try {
-    const query = `
-      UPDATE upload
+  const query = `
+      UPDATE uploads
       SET status = $1
       WHERE id = $2
       RETURNING *; 
     `;
-    const values = [status, id];
+  const values = [status, id];
 
-    const { rows } = await pool.query(query, values);
+  const { rows, rowCount } = await pool.query(query, values);
 
-    return rows[0] ? rows[0] : null;
-  } catch (error) {
-    throw new Error("Failed update upload status by id");
-  }
+  if (rowCount) return null;
+
+  return rows[0];
 };
 
 while (true) {
@@ -640,7 +603,7 @@ while (true) {
 
     const outputDir = path.join(TEMP_FOLDER, id);
 
-    let { path: filePath, file_name: fileName } = upload;
+    let { file_path: filePath, file_name: fileName } = upload;
     filePath = path.join(FILE_STORAGE_PATH, filePath);
 
     await processZipFile(filePath, outputDir, fileName, id)

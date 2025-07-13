@@ -58,7 +58,7 @@ const ConsultUpload = ({ params }) => {
 
   const fetchData = async () => {
     try {
-      const response = await fetch(`/api/upload?id=${id}`);
+      const response = await fetch(`/api/uploads?id=${id}`);
       const { success, data, message } = await response.json();
       if (success) {
         if (!data.length) {

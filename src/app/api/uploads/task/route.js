@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import { getUploadById } from "@/lib/uploads";
-import { validateGETRequest } from ".";
 import { redis } from "@/lib/redis";
 
 export const GET = async (request) => {
   try {
-    const result = validateGETRequest(request);
-    if (!result.success) {
-      return NextResponse.json(result, { status: 400 });
-    }
+    const { searchParams } = new URL(request.url);
 
-    const { id, task } = result.data;
+    const id = searchParams.get("id");
+    const task = searchParams.get("task");
 
     const { id: userId, permissions = [] } = await getUser();
     const canProcessAllUploads = permissions.includes(
@@ -24,43 +21,23 @@ export const GET = async (request) => {
     const upload = await getUploadById(id);
     if (!upload) {
       return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Not found: upload not found",
-        },
+        { success: false, data: null, message: "Téléversement non trouvé." },
         { status: 404 }
       );
     }
 
     if (task === "process") {
-      if (canProcessAllUploads) {
-      } else if (canProcessOwnUploads) {
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            data: null,
-            message: "Forbidden: no Process access",
-          },
-          { status: 403 }
-        );
-      }
-      if (!canProcessAllUploads && !canProcessOwnUploads) {
-        return NextResponse.json(
-          { success: false, data: null, message: "Forbidden: no  access" },
-          { status: 403 }
-        );
-      }
-
       const { status, user_id: ownerId } = upload;
 
-      if (!hasAllAccess && userId !== ownerId) {
+      if (
+        !canProcessAllUploads &&
+        (canProcessOwnUploads || userId !== ownerId)
+      ) {
         return NextResponse.json(
           {
             success: false,
             data: null,
-            message: "Forbidden: insufficient permissions",
+            message: "Autorisations insuffisantes.",
           },
           { status: 403 }
         );
@@ -68,37 +45,26 @@ export const GET = async (request) => {
 
       if (status !== "pending") {
         return NextResponse.json(
-          {
-            success: false,
-            data: null,
-            message: "Bad request: upload already processed",
-          },
+          { success: false, data: null, message: "Téléversement déjà traité." },
           { status: 400 }
         );
       }
+
       await redis.rPush("uploadsToBeProcessed", id);
+      return NextResponse.json(
+        { success: true, data: id, message: "Téléversement en traitement." },
+        { status: 200 }
+      );
     } else {
       return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Bad request: unsupported task",
-        },
+        { success: false, data: null, message: "Tâche non prise en charge." },
         { status: 400 }
       );
     }
-
+  } catch (error) {
+    console.log(error);
     return NextResponse.json(
-      { success: true, data: id, message: "Task started ..." },
-      { status: 200 }
-    );
-  } catch {
-    return NextResponse.json(
-      {
-        success: false,
-        data: null,
-        message: "Internal server error",
-      },
+      { success: false, data: null, message: "Erreur interne du serveur." },
       { status: 500 }
     );
   }

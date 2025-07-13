@@ -1,87 +1,39 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
-  getFichesForConsumption,
-  getFiches,
-  getOwnerFicheById,
-  updateFiche,
-  deleteFiche,
-} from "@/lib/fiche";
-import {
-  validateGetRequest,
-  createFileBuffer,
-  validatePutRequest,
-  validateDeleteRequest,
-} from ".";
+  getFichesWhere,
+  // getOwnerFicheById,
+  // updateFiche,
+  // deleteFiche,
+} from "@/lib/fiches";
+import { validatePutRequest, validateDeleteRequest } from ".";
 
 export const GET = async (request) => {
   try {
-    // Validate the request parameters
-    const { success, data, message } = validateGetRequest(request);
-    if (!success) {
-      return NextResponse.json({ success, data, message }, { status: 400 });
-    }
+    const { searchParams } = new URL(request.url);
+    const ids = searchParams.getAll("id");
 
-    const { id: userId, role, permissions = [] } = await getUser();
+    const { role, permissions = [] } = await getUser();
+    const canGetFiches = permissions.includes("CAN_GET_FICHES");
 
-    const hasAccess = permissions.includes("CAN_GET_FICHES");
-    if (!hasAccess) {
-      return NextResponse.json(
-        { success: false, data: [], message: "Forbidden: no GET access" },
-        { status: 403 }
-      );
-    }
-
-    const { ids, download, getFile } = data;
-    const isUser = role === "user" ? { userId } : null;
-
-    if (download) {
-      const fiches = await getFiches(ids, isUser);
-      if (!fiches.length) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Not found: No fiche founded for downloading",
-          },
-          { status: 404 }
-        );
+    const where = { fiches: {} };
+    if (canGetFiches) {
+      if (ids.length) where.fiches.id = ids;
+      if (role === "user") {
+        where.fiches.status = "valid";
       }
-      const { fileBuffer, fileName } = await createFileBuffer(fiches);
-      return new NextResponse(fileBuffer, {
-        headers: {
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(
-            fileName
-          )}"`,
-          "Content-Type": "application/zip",
-        },
-      });
+    } else {
+      where.fiches.id = [];
     }
 
-    if (getFile) {
-      fiches = await getFiches(ids, isUser);
-      if (!fiches.length) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Not found: No fiche founded for downloading",
-          },
-          { status: 404 }
-        );
-      }
-
-      const { path } = fiches[0];
-    }
-
-    const fiches = await getFichesForConsumption(ids, isUser);
+    const fiches = await getFichesWhere(where);
     return NextResponse.json(
       { success: true, data: fiches, message: null },
       { status: 200 }
     );
   } catch {
     return NextResponse.json(
-      { success: false, data: [], message: "Internal Server Error" },
+      { success: false, data: [], message: "Erreur interne du serveur." },
       { status: 500 }
     );
   }

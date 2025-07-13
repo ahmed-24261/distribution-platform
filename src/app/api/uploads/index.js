@@ -1,31 +1,7 @@
 import path from "path";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
-import { validate as isUUID } from "uuid";
 import { countUploadsByDisplayName } from "@/lib/uploads";
-
-const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
-
-// --- GET request
-export const validateGetRequest = (request) => {
-  const { searchParams } = new URL(request.url);
-
-  const ids = searchParams.getAll("id");
-
-  const countInvalidIds = ids.filter((id) => !isUUID(id, 4)).length;
-  if (countInvalidIds) {
-    return {
-      success: false,
-      data: [],
-      message: "Bad request: 'id' must be a valid UUID",
-    };
-  }
-
-  return {
-    success: true,
-    data: { ids },
-  };
-};
 
 // --- Post request
 export const validatePostRequest = async (request) => {
@@ -118,9 +94,9 @@ export const validatePostRequest = async (request) => {
   return { success: true, data: { formData } };
 };
 
-export const constructUploadData = async (formData, userId) => {
+export const constructPostData = async (formData, userId) => {
   const data = {};
-  let buffer;
+  let fileBuffer;
 
   const type = formData.get("type");
 
@@ -140,14 +116,14 @@ export const constructUploadData = async (formData, userId) => {
   data.display_name = displayName;
   data.type = type;
 
-  if (type === "file" || type === "api") {
+  if (["file", "api"].includes(type)) {
     const file = formData.get("file");
 
     const fileName = file.name;
     const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
 
-    buffer = Buffer.from(await file.arrayBuffer());
-    const fileHash = calculateFileHash(buffer);
+    fileBuffer = Buffer.from(await file.arrayBuffer());
+    const fileHash = calculateFileHash(fileBuffer);
 
     data.file_name = fileName;
     data.file_path = filePath;
@@ -169,31 +145,5 @@ export const constructUploadData = async (formData, userId) => {
     const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
   }
 
-  return { data, buffer };
-};
-
-// --- DELETE request
-export const validateDeleteRequest = async (request) => {
-  const { searchParams } = new URL(request.url);
-
-  const id = searchParams.get("id");
-
-  if (!id) {
-    return {
-      success: false,
-      data: null,
-      message: "Bad request: 'id' required",
-    };
-  }
-
-  const invalidId = !isUUID(id, 4);
-  if (invalidId) {
-    return {
-      success: false,
-      data: null,
-      message: "Bad request: 'id' must be a valid UUID",
-    };
-  }
-
-  return { success: true, data: { id } };
+  return { data, fileBuffer };
 };
