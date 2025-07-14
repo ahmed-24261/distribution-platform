@@ -55,7 +55,8 @@ export const getUploadsWhere = async (where) => {
               jsonb_build_object(
                 'id', ff.id,
                 'source', s.name,
-                'date', ff.date
+                'date', ff.date,
+                'message', ff.message
               )
               ORDER BY ff.id
             ),

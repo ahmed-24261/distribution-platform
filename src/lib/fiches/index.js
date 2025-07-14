@@ -139,7 +139,6 @@ export const getFicheWhere = async (where) => {
       JOIN groups_sources gs ON fiches.source_id = gs.source_id
       JOIN users ON gs.group_id = users.group_id
       JOIN sources ON sources.id = fiches.source_id
-      JOIN documents ON documents.fiche_id = fiches.id
       ${whereClause}
       GROUP BY fiches.id, sources.name
       ORDER BY fiches.date DESC;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import { getUploadById } from "@/lib/uploads";
 import { getFicheWhere } from "@/lib/fiches";
+import { getDocumentWhere } from "@/lib/documents";
 import { getFailedFicheById } from "@/lib/failedFiches";
 import fs from "fs/promises";
 import path from "path";
@@ -252,29 +253,103 @@ export async function GET(request) {
           },
         });
       }
+    } else if (file) {
+      const id = ids[0];
+      const table = tables[0];
+
+      if (table === "fiches") {
+        if (!canGetFiches) {
+          return NextResponse.json(
+            {
+              success: false,
+              data: null,
+              message: "Autorisation insuffisante",
+            },
+            { status: 403 }
+          );
+        }
+
+        const where = { fiches: {}, users: {} };
+
+        where.fiches.id = id;
+        if (role === "user") {
+          where.fiches.status = "valid";
+          where.users.id = userId;
+        }
+
+        const fiche = await getFicheWhere(where);
+        if (!fiche) {
+          return NextResponse.json(
+            {
+              success: false,
+              data: null,
+              message: "Fiche introuvable",
+            },
+            { status: 404 }
+          );
+        }
+
+        const filePath = path.join(FILE_STORAGE_PATH, fiche.file_path);
+        const fileContent = await fs.readFile(filePath);
+        return new NextResponse(fileContent, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="${path.basename(
+              filePath
+            )}"`,
+          },
+        });
+      } else if (table === "documents") {
+        if (!canGetFiches) {
+          return NextResponse.json(
+            {
+              success: false,
+              data: null,
+              message: "Autorisation insuffisante",
+            },
+            { status: 403 }
+          );
+        }
+
+        const where = { documents: {}, fiches: {}, users: {} };
+
+        where.documents.id = id;
+        if (role === "user") {
+          where.fiches.status = "valid";
+          where.users.id = userId;
+        }
+
+        const document = await getDocumentWhere(where);
+        if (!document) {
+          return NextResponse.json(
+            {
+              success: false,
+              data: null,
+              message: "Document introuvable",
+            },
+            { status: 404 }
+          );
+        }
+
+        const filePath = path.join(FILE_STORAGE_PATH, document.file_path);
+        const fileContent = await fs.readFile(filePath);
+        return new NextResponse(fileContent, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="${path.basename(
+              filePath
+            )}"`,
+          },
+        });
+      } else {
+        return NextResponse.json(
+          { success: false, data: null, message: "Mauvaise requête" },
+          { status: 400 }
+        );
+      }
     }
 
     if (false) {
-      try {
-        await fs.access(fullPath, fs.constants.F_OK);
-      } catch {
-        return NextResponse.json(
-          { error: { message: "File not found." } },
-          { status: 404 }
-        );
-      }
-
-      // For downloading files
-      return new NextResponse(fileBuffer, {
-        headers: {
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(
-            fileName
-          )}"`,
-          "Content-Type": "application/zip",
-        },
-      });
-      const fileContent = await fs.readFile(fullPath);
-
       return new NextResponse(fileContent, {
         headers: {
           "Content-Type": "application/zip",

@@ -139,13 +139,14 @@ CREATE TABLE
 	failed_fiches (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid () NOT NULL,
 		source_id UUID REFERENCES sources (id) ON DELETE CASCADE,
-		date TIMESTAMP DEFAULT now (),
+		date TIMESTAMP,
 		created_by UUID REFERENCES users (id) ON DELETE CASCADE,
 		file_name TEXT,
 		file_path TEXT UNIQUE,
 		file_hash VARCHAR(64) UNIQUE,
+		Message TEXT,
 		upload_id UUID NOT NULL REFERENCES uploads (id) ON DELETE CASCADE,
-		dump TEXT
+		dump JSONB
 	);
 
 -- Observations (Self-reference)

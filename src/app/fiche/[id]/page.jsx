@@ -12,13 +12,13 @@ const Fiche = ({ params }) => {
 
   const fetchData = async () => {
     try {
-      const response = await fetch(`/api/fiche?id=${id}`);
+      const response = await fetch(`/api/fiches?id=${id}`);
       const { success, data, message } = await response.json();
       if (success) {
         console.log(data);
         setFiche(data[0]);
       } else {
-        alert("GET api/fiche: " + message);
+        alert("GET api/fiches: " + message);
       }
     } catch (error) {
       alert(error.message);

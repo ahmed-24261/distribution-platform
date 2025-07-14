@@ -70,19 +70,15 @@ const UploadHistory = () => {
 
   const handleDownload = async (id) => {
     try {
-      const request = `/api/uploads?id=${id}&download=true`;
+      const request = `/api/files?id=${id}&table=uploads&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
-        toast.error("Erreur lors du téléchargement", {
-          description: message,
-        });
+        toast.error(message);
         return;
       }
-      toast.success("Téléchargement lancé", {
-        description: "Le téléversement est en cours de téléchargement",
-      });
+      toast.success("Téléchargement lancé");
 
       window.location.href = request;
     } catch {
