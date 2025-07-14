@@ -35,7 +35,7 @@ export const GET = async (request) => {
     );
   } catch {
     return NextResponse.json(
-      { success: false, data: [], message: "Erreur interne du serveur." },
+      { success: false, data: [], message: "Erreur interne du serveur" },
       { status: 500 }
     );
   }
@@ -55,7 +55,7 @@ export const POST = async (request) => {
 
     if (!canCreateUpload) {
       return NextResponse.json(
-        { success: false, data: null, message: "Autorisations insuffisantes." },
+        { success: false, data: null, message: "Autorisations insuffisantes" },
         { status: 403 }
       );
     }
@@ -65,7 +65,7 @@ export const POST = async (request) => {
     const upload = await getUploadByFileHash(data.file_hash);
     if (upload) {
       return NextResponse.json(
-        { success: false, data: null, message: "Téléversement existe déjà." },
+        { success: false, data: null, message: "Téléversement existe déjà" },
         { status: 409 }
       );
     }
@@ -75,13 +75,13 @@ export const POST = async (request) => {
       {
         success: true,
         data: createdUpload,
-        message: "Téléversement a été ajouté avec succès.",
+        message: "Téléversement a été ajouté avec succès",
       },
       { status: 201 }
     );
   } catch {
     return NextResponse.json(
-      { success: false, data: null, message: "Erreur interne du serveur." },
+      { success: false, data: null, message: "Erreur interne du serveur" },
       { status: 500 }
     );
   }
@@ -99,7 +99,7 @@ export const DELETE = async (request) => {
     const upload = await getUploadById(id);
     if (!upload) {
       return NextResponse.json(
-        { success: false, data: null, message: "Téléversement non trouvé." },
+        { success: false, data: null, message: "Téléversement non trouvé" },
         { status: 404 }
       );
     }
@@ -110,7 +110,7 @@ export const DELETE = async (request) => {
         {
           success: false,
           data: null,
-          message: "Autorisations insuffisantes.",
+          message: "Autorisations insuffisantes",
         },
         { status: 403 }
       );
@@ -130,7 +130,7 @@ export const DELETE = async (request) => {
         {
           success: false,
           data: null,
-          message: "Erreur lors de la suppression du téléversement.",
+          message: "Erreur lors de la suppression du téléversement",
         },
         { status: 500 }
       );
@@ -140,13 +140,13 @@ export const DELETE = async (request) => {
       {
         success: true,
         data: uploadId,
-        message: "Téléversement a été supprimé avec succès.",
+        message: "Téléversement a été supprimé avec succès",
       },
       { status: 200 }
     );
-  } catch {
+  } catch (e) {
     return NextResponse.json(
-      { success: false, data: null, message: "Erreur interne du serveur." },
+      { success: false, data: null, message: "Erreur interne du serveur" },
       { status: 500 }
     );
   }

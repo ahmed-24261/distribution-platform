@@ -2,25 +2,24 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
 import {
   getFichesWhere,
-  // getOwnerFicheById,
-  // updateFiche,
-  // deleteFiche,
+  updateFicheWhere,
+  deleteFicheWhere,
 } from "@/lib/fiches";
-import { validatePutRequest, validateDeleteRequest } from ".";
 
 export const GET = async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const ids = searchParams.getAll("id");
 
-    const { role, permissions = [] } = await getUser();
+    const { id: userId, role, permissions = [] } = await getUser();
     const canGetFiches = permissions.includes("CAN_GET_FICHES");
 
-    const where = { fiches: {} };
+    const where = { fiches: {}, users: {} };
     if (canGetFiches) {
       if (ids.length) where.fiches.id = ids;
       if (role === "user") {
         where.fiches.status = "valid";
+        where.users.id = userId;
       }
     } else {
       where.fiches.id = [];
@@ -33,7 +32,7 @@ export const GET = async (request) => {
     );
   } catch {
     return NextResponse.json(
-      { success: false, data: [], message: "Erreur interne du serveur." },
+      { success: false, data: [], message: "Erreur interne du serveur" },
       { status: 500 }
     );
   }
@@ -41,121 +40,104 @@ export const GET = async (request) => {
 
 export const PUT = async (request) => {
   try {
+    const jsonData = await request.json();
+
     const { id: userId, permissions = [] } = await getUser();
+    const canUpdateAllFiches = permissions.includes("CAN_UPDATE_ALL_FICHES");
+    const canUpdateOwnFiches = permissions.includes("CAN_UPDATE_OWN_FICHES");
 
-    const hasAllAccess = permissions.includes("CAN_UPDATE_ALL_FICHES");
-    const hasOwnAccess = permissions.includes("CAN_UPDATE_OWN_FICHES");
-    if (!hasAllAccess && !hasOwnAccess) {
-      return NextResponse.json(
-        { success: false, data: [], message: "Forbidden: no UPDATE access" },
-        { status: 403 }
-      );
-    }
+    const updatedFicheIds = [];
+    const errors = [];
+    for (const data of jsonData) {
+      try {
+        const id = data?.id;
+        const update = data?.update;
 
-    const { success, data, message } = validatePutRequest(request);
-    if (!success) {
-      return NextResponse.json({ success, data, message }, { status: 400 });
-    }
-
-    const { items } = data;
-
-    if (items.length === 1) {
-      const item = items[0];
-
-      const id = item?.id;
-      const update = item?.update;
-
-      const ownerId = await getOwnerFicheById(id);
-      if (!ownerId) {
-        return NextResponse.json(
-          { success: false, data: [], message: "Not found: fiche not found" },
-          { status: 404 }
-        );
-      }
-
-      if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Forbidden: not allowed to update this fiche",
-          },
-          { status: 403 }
-        );
-      }
-
-      const updatedFicheId = await updateFiche(id, update);
-      if (!updatedFicheId) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Internal Server Error: failed to update fiche",
-          },
-          { status: 500 }
-        );
-      } else {
-        return NextResponse.json(
-          {
-            success: true,
-            data: [id],
-            message: "Fiche was updated successfully",
-          },
-          { status: 200 }
-        );
-      }
-    } else {
-      const updatedFicheIds = [];
-      for (const id of ids) {
-        const ownerId = await getOwnerFicheById(id);
-        if (!ownerId) continue;
-
-        if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) continue;
-
-        const updatedFicheId = await updateFiche(id);
-        if (updatedFicheId) {
-          updatedFicheIds.push(updatedFicheId);
+        const where = { fiches: {}, users: {} };
+        if (canUpdateAllFiches) {
+          where.fiches.id = id;
+        } else if (canUpdateOwnFiches) {
+          where.fiches.id = id;
+          where.users.id = userId;
+        } else {
+          where.fiches.id = null;
         }
-      }
 
-      const total = ids.length;
-      const updated = updatedFicheIds.length;
+        const ficheId = await updateFicheWhere(where, update);
 
-      if (updated === 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Internal Server Error: failed to update all fiches",
-          },
-          { status: 500 }
-        );
-      } else if (updated < total) {
-        return NextResponse.json(
-          {
-            success: true,
-            data: updatedFicheIds,
-            message: `${updated} out of ${total} fiches have been successfully updated`,
-          },
-          { status: 200 }
-        );
-      } else {
-        return NextResponse.json(
-          {
-            success: true,
-            data: ids,
-            message: "Fiche was updated successfully",
-          },
-          { status: 200 }
-        );
+        if (!ficheId) {
+          errors.push({
+            message: "Autorisations insuffisantes ou fiche introuvable",
+            status: 403,
+          });
+
+          continue;
+        }
+
+        updatedFicheIds.push(ficheId);
+      } catch {
+        errors.push({ message: "Erreur interne du serveur", status: 500 });
       }
+    }
+
+    const total = jsonData.length;
+    const updated = updatedFicheIds.length;
+
+    if (total === 1 && updated === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: errors[0].message,
+        },
+        { status: errors[0].status }
+      );
+    } else if (total > 1 && updated === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: "Mettre à jour des fiches a échoué",
+        },
+        { status: 500 }
+      );
+    } else if (total !== updated) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: updatedFicheIds,
+          message: `${updated} sur ${total} fiches ont été mettre à jour avec succès`,
+        },
+        { status: 500 }
+      );
+    } else if (total >= 1 && total === updated) {
+      return NextResponse.json(
+        {
+          success: true,
+          data: updatedFicheIds,
+          message:
+            total === 1
+              ? "Fiche a été mise à jour avec succès"
+              : "Toutes les fiches ont été mises à jour avec succès",
+        },
+        { status: 200 }
+      );
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: "Mauvaise requête",
+        },
+        { status: 400 }
+      );
     }
   } catch {
     return NextResponse.json(
       {
         success: false,
         data: [],
-        message: "Internal error server",
+        message: "Erreur interne du serveur",
       },
       { status: 500 }
     );
@@ -164,118 +146,103 @@ export const PUT = async (request) => {
 
 export const DELETE = async (request) => {
   try {
+    const { searchParams } = new URL(request.url);
+
+    const ids = searchParams.getAll("id");
+
     const { id: userId, permissions = [] } = await getUser();
+    const canDeleteAllFiches = permissions.includes("CAN_DELETE_ALL_FICHES");
+    const canDeleteOwnFiches = permissions.includes("CAN_DELETE_OWN_FICHES");
 
-    const hasAllAccess = permissions.includes("CAN_DELETE_ALL_FICHES");
-    const hasOwnAccess = permissions.includes("CAN_DELETE_OWN_FICHES");
-    if (!hasAllAccess && !hasOwnAccess) {
-      return NextResponse.json(
-        { success: false, data: [], message: "Forbidden: no DELETE access" },
-        { status: 403 }
-      );
-    }
-
-    const { success, data, message } = validateDeleteRequest(request);
-    if (!success) {
-      return NextResponse.json({ success, data, message }, { status: 400 });
-    }
-
-    const { ids } = data;
-
-    if (ids.length === 1) {
-      const id = ids[0];
-
-      const ownerId = await getOwnerFicheById(id);
-      if (!ownerId) {
-        return NextResponse.json(
-          { success: false, data: [], message: "Not found: fiche not found" },
-          { status: 404 }
-        );
-      }
-
-      if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Forbidden: not allowed to delete this fiche",
-          },
-          { status: 403 }
-        );
-      }
-
-      const deletedFicheId = await deleteFiche(id);
-      if (!deletedFicheId) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Internal Server Error: failed to delete fiche",
-          },
-          { status: 500 }
-        );
-      } else {
-        return NextResponse.json(
-          {
-            success: true,
-            data: [id],
-            message: "Fiche was deleted successfully",
-          },
-          { status: 200 }
-        );
-      }
-    } else {
-      const deletedFicheIds = [];
-      for (const id of ids) {
-        const ownerId = await getOwnerFicheById(id);
-        if (!ownerId) continue;
-
-        if (!hasAllAccess && (!hasOwnAccess || ownerId !== userId)) continue;
-
-        const deletedFicheId = await deleteFiche(id);
-        if (deletedFicheId) {
-          deletedFicheIds.push(deletedFicheId);
+    const deletedFicheIds = [];
+    const errors = [];
+    for (const id of ids) {
+      try {
+        const where = { fiches: {}, uploads: {} };
+        if (canDeleteAllFiches) {
+          where.fiches.id = id;
+        } else if (canDeleteOwnFiches) {
+          where.fiches.id = id;
+          where.uploads.user_id = userId;
+        } else {
+          where.fiches.id = null;
         }
-      }
 
-      const total = ids.length;
-      const deleted = deletedFicheIds.length;
+        const ficheId = await deleteFicheWhere(where);
 
-      if (deleted === 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            data: [],
-            message: "Internal Server Error: failed to delete all fiches",
-          },
-          { status: 500 }
-        );
-      } else if (deleted < total) {
-        return NextResponse.json(
-          {
-            success: true,
-            data: deletedFicheIds,
-            message: `${deleted} out of ${total} fiches have been successfully deleted`,
-          },
-          { status: 200 }
-        );
-      } else {
-        return NextResponse.json(
-          {
-            success: true,
-            data: ids,
-            message: "Fiche was deleted successfully",
-          },
-          { status: 200 }
-        );
+        if (!ficheId) {
+          errors.push({
+            message: "Autorisations insuffisantes ou fiche introuvable",
+            status: 403,
+          });
+
+          continue;
+        }
+
+        deletedFicheIds.push(ficheId);
+      } catch {
+        errors.push({ message: "Erreur interne du serveur", status: 500 });
       }
+    }
+
+    const total = ids.length;
+    const deleted = deletedFicheIds.length;
+
+    if (total === 1 && deleted === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: errors[0].message,
+        },
+        { status: errors[0].status }
+      );
+    } else if (total > 1 && deleted === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: "Suppression des fiches a échoué",
+        },
+        { status: 500 }
+      );
+    } else if (total !== deleted) {
+      return NextResponse.json(
+        {
+          success: false,
+          data: deletedFicheIds,
+          message: `${deleted} sur ${total} fiches ont été supprimées avec succès`,
+        },
+        { status: 500 }
+      );
+    } else if (total >= 1 && total === deleted) {
+      return NextResponse.json(
+        {
+          success: true,
+          data: deletedFicheIds,
+          message:
+            total === 1
+              ? "Fiche a été supprimée avec succès"
+              : "Toutes les fiches ont supprimées avec succès",
+        },
+        { status: 200 }
+      );
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          data: [],
+          message: "Mauvaise requête",
+        },
+        { status: 400 }
+      );
     }
   } catch {
     return NextResponse.json(
       {
         success: false,
         data: [],
-        message: "Internal Server Error",
+        message: "Erreur interne du serveur",
       },
       { status: 500 }
     );

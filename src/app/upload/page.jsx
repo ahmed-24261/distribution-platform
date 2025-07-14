@@ -48,7 +48,7 @@ const UploadHistory = () => {
 
   const handleProcess = async (id) => {
     try {
-      const response = await fetch(`api/uploads/task?task=process&id=${id}`);
+      const response = await fetch(`api/uploads/tasks?task=process&id=${id}`);
 
       const { success, data, message } = await response.json();
 
@@ -59,13 +59,9 @@ const UploadHistory = () => {
       );
 
       if (success) {
-        toast.success("Traitement commencé", {
-          description: message,
-        });
+        toast.success(message);
       } else {
-        toast.error("Échec du traitement", {
-          description: message,
-        });
+        toast.error(message);
       }
     } catch {
       toast.error("Une erreur s'est produite");
@@ -74,7 +70,7 @@ const UploadHistory = () => {
 
   const handleDownload = async (id) => {
     try {
-      const request = `/api/upload?id=${id}&download=true`;
+      const request = `/api/uploads?id=${id}&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
@@ -105,13 +101,9 @@ const UploadHistory = () => {
       setUploads((prev) => prev.filter((upload) => upload.id !== data));
 
       if (success) {
-        toast.success("Téléversement supprimé", {
-          description: message,
-        });
+        toast.success(message);
       } else {
-        toast.error("Échec de la suppression", {
-          description: message,
-        });
+        toast.error(message);
       }
     } catch {
       toast.error("Une erreur s'est produite");

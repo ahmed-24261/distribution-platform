@@ -77,21 +77,22 @@ async function seed() {
     // Insert permissions
     const permissions = [
       { name: "CAN_CREATE_UPLOAD", description: "can create upload" },
+
       { name: "CAN_GET_ALL_UPLOADS", description: "can get all uploads" },
       { name: "CAN_GET_OWN_UPLOADS", description: "can get own uploads" },
-      { name: "CAN_UPDATE_ALL_UPLOADS", description: "can update upload" },
-      { name: "CAN_UPDATE_OWN_UPLOADS", description: "can update own upload" },
+
+      {
+        name: "CAN_PROCESS_ALL_UPLOADS",
+        description: "can process all uploads",
+      },
+      {
+        name: "CAN_PROCESS_OWN_UPLOADS",
+        description: "can process own uploads",
+      },
+
       { name: "CAN_DELETE_ALL_UPLOADS", description: "can delete all uploads" },
       { name: "CAN_DELETE_OWN_UPLOADS", description: "can delete own uploads" },
 
-      {
-        name: "CAN_DOWNLOAD_ALL_UPLOADS",
-        description: "can download all uploads",
-      },
-      {
-        name: "CAN_DOWNLOAD_OWN_UPLOADS",
-        description: "can download own uploads",
-      },
       { name: "CAN_GET_FICHES", description: "can get fiches" },
 
       { name: "CAN_UPDATE_ALL_FICHES", description: "can update all fiches" },
@@ -99,15 +100,6 @@ async function seed() {
 
       { name: "CAN_DELETE_ALL_FICHES", description: "can delete all fiches" },
       { name: "CAN_DELETE_OWN_FICHES", description: "can delete own fiches" },
-
-      {
-        name: "CAN_DOWNLOAD_ALL_FICHES",
-        description: "can download all fiches",
-      },
-      {
-        name: "CAN_DOWNLOAD_OWN_FICHES",
-        description: "can download own fiches",
-      },
     ];
     const permissionQueries = `INSERT INTO permissions (name, description) VALUES ${permissions
       .map((resource) => `('${resource.name}', '${resource.description}')`)
@@ -122,19 +114,17 @@ async function seed() {
       canCreateUpload,
       canGetAllUploads,
       canGetOwnUploads,
-      canUpdateAllUpload,
-      canUpdateOwnUpload,
+      canProcessAllUploads,
+      canProcessOwnUploads,
       canDeleteAllUploads,
       canDeleteOwnUploads,
-      canDownloadAllUploads,
-      canDownloadOwnUploads,
+
       canGetFiches,
       canUpdateAllFiches,
       canUpdateOwnFiches,
+
       canDeleteAllFiches,
       canDeleteOwnFiches,
-      canDownloadAllFiches,
-      canDownloadOwnFiches,
     ] = permissionIds;
 
     // Insert admins
@@ -235,8 +225,8 @@ async function seed() {
       { userId: superAdmin, permissionId: canCreateUpload },
       { userId: superAdmin, permissionId: canGetAllUploads },
       { userId: superAdmin, permissionId: canGetOwnUploads },
-      { userId: superAdmin, permissionId: canUpdateAllUpload },
-      { userId: superAdmin, permissionId: canUpdateOwnUpload },
+      { userId: superAdmin, permissionId: canProcessAllUploads },
+      { userId: superAdmin, permissionId: canProcessOwnUploads },
       { userId: superAdmin, permissionId: canDeleteAllUploads },
       { userId: superAdmin, permissionId: canDeleteOwnUploads },
       { userId: superAdmin, permissionId: canDeleteAllFiches },
@@ -247,24 +237,20 @@ async function seed() {
       { userId: admin1, permissionId: canCreateUpload },
       { userId: admin1, permissionId: canGetAllUploads },
       { userId: admin1, permissionId: canGetOwnUploads },
-      { userId: admin1, permissionId: canUpdateAllUpload },
-      { userId: admin1, permissionId: canUpdateOwnUpload },
+      { userId: admin1, permissionId: canProcessAllUploads },
+      { userId: admin1, permissionId: canProcessOwnUploads },
       { userId: admin1, permissionId: canDeleteAllUploads },
-      { userId: admin1, permissionId: canDownloadAllUploads },
       { userId: admin1, permissionId: canGetFiches },
 
       { userId: admin1, permissionId: canDeleteAllFiches },
       { userId: admin1, permissionId: canDeleteOwnFiches },
       { userId: admin1, permissionId: canUpdateAllFiches },
       { userId: admin1, permissionId: canUpdateOwnFiches },
-      { userId: admin1, permissionId: canDownloadAllFiches },
 
       { userId: admin2, permissionId: canCreateUpload },
       { userId: admin2, permissionId: canGetOwnUploads },
-      { userId: admin2, permissionId: canUpdateOwnUpload },
       { userId: admin2, permissionId: canDeleteOwnUploads },
-      { userId: admin2, permissionId: canDownloadOwnUploads },
-      { userId: admin2, permissionId: canDownloadOwnFiches },
+
       { userId: admin2, permissionId: canDeleteOwnFiches },
       { userId: admin2, permissionId: canUpdateOwnFiches },
 
@@ -272,7 +258,7 @@ async function seed() {
       { userId: admin3, permissionId: canGetAllUploads },
       { userId: admin3, permissionId: canGetOwnUploads },
       { userId: admin3, permissionId: canDeleteOwnUploads },
-      { userId: admin3, permissionId: canUpdateOwnUpload },
+      { userId: admin3, permissionId: canProcessOwnUploads },
 
       { userId: admin4, permissionId: canCreateUpload },
       { userId: admin4, permissionId: canGetAllUploads },

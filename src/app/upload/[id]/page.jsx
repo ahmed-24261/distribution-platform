@@ -89,19 +89,15 @@ const ConsultUpload = ({ params }) => {
 
   const handleDownloadUpload = async (id) => {
     try {
-      const request = `/api/upload?id=${id}&download=true`;
+      const request = `/api/files?id=${id}&table=uploads&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
-        toast.error("Erreur lors du téléchargement", {
-          description: message,
-        });
+        toast.error(message);
         return;
       }
-      toast.success("Téléchargement lancé", {
-        description: "Le téléversement est en cours de téléchargement",
-      });
+      toast.success("Téléchargement lancé");
 
       window.location.href = request;
     } catch {
@@ -111,19 +107,15 @@ const ConsultUpload = ({ params }) => {
 
   const handleDownloadFiche = async (id) => {
     try {
-      const request = `/api/fiche?id=${id}&download=true`;
+      const request = `/api/files?id=${id}&table=fiches&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
-        toast.error("Erreur lors du téléchargement", {
-          description: message,
-        });
+        toast.error(message);
         return;
       }
-      toast.success("Téléchargement lancé", {
-        description: "Votre ressource est en cours de téléchargement",
-      });
+      toast.success("Téléchargement lancé");
 
       window.location.href = request;
     } catch {
@@ -133,19 +125,15 @@ const ConsultUpload = ({ params }) => {
 
   const handleDownloadFailedFiche = async (id) => {
     try {
-      const request = `/api/failedFiche?id=${id}&download=true`;
+      const request = `/api/files?id=${id}&table=failed_fiches&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
-        toast.error("Erreur lors du téléchargement", {
-          description: message,
-        });
+        toast.error(message);
         return;
       }
-      toast.success("Téléchargement lancé", {
-        description: "Votre ressource est en cours de téléchargement",
-      });
+      toast.success("Téléchargement lancé");
 
       window.location.href = request;
     } catch {
@@ -163,24 +151,20 @@ const ConsultUpload = ({ params }) => {
         return;
       }
 
-      const ids = ficheIds.length ? ficheIds : failedFicheIds;
-      const ficheType = ficheIds.length ? "fiche" : "failedFiche";
+      const paramsQuery =
+        ficheIds.map((id) => `id=${id}&table=fiches`).join("&") +
+        "&" +
+        failedFicheIds.map((id) => `id=${id}&table=failed_fiches`).join("&");
 
-      const paramsQuery = ids.map((id) => `id=${id}`).join("&");
-
-      const request = `/api/${ficheType}?${paramsQuery}&download=true`;
+      const request = `/api/files?${paramsQuery}&download=true`;
 
       const response = await fetch(request);
       if (!response.ok) {
         const { message } = await response.json();
-        toast.error("Erreur lors du téléchargement", {
-          description: message,
-        });
+        toast.error(message);
         return;
       }
-      toast.success("Téléchargement lancé", {
-        description: "Votre ressources est en cours de téléchargement",
-      });
+      toast.success("Téléchargement lancé");
 
       window.location.href = request;
     } catch {
@@ -189,58 +173,60 @@ const ConsultUpload = ({ params }) => {
   };
 
   const handleDeleteFiche = async (id) => {
-    const response = await fetch(`/api/fiche?id=${id}`, {
-      method: "DELETE",
-    });
-
-    const { success, message, data } = await response.json();
-    console.log("data: ", data);
-
-    if (success) {
-      setUpload((prev) => ({
-        ...prev,
-        fiches: prev.fiches.filter((fiche) => !data.includes(fiche.id)),
-      }));
-
-      setSelectedItems((prev) => ({
-        ...prev,
-        fiches: prev.fiches.filter((item) => !data.includes(item)),
-      }));
-      toast.success("Suppression réussie", {
-        description: message,
+    try {
+      const response = await fetch(`/api/fiches?id=${id}`, {
+        method: "DELETE",
       });
-    } else {
-      toast.error("Échec de la suppression", {
-        description: message,
-      });
+
+      const { success, message, data } = await response.json();
+
+      if (success) {
+        setUpload((prev) => ({
+          ...prev,
+          fiches: prev.fiches.filter((fiche) => !data.includes(fiche.id)),
+        }));
+
+        setSelectedItems((prev) => ({
+          ...prev,
+          fiches: prev.fiches.filter((item) => !data.includes(item)),
+        }));
+
+        toast.success(message);
+      } else {
+        toast.error(message);
+      }
+    } catch {
+      toast.error("Une erreur s'est produite.");
     }
   };
 
   const handleDeleteFailedFiche = async (id) => {
-    const response = await fetch(`/api/failedFiche?id=${id}`, {
-      method: "DELETE",
-    });
-
-    const { success, message, data } = await response.json();
-
-    if (success) {
-      setUpload((prev) => ({
-        ...prev,
-        failedFiches: prev.failedFiches.filter(
-          (fiche) => !data.includes(fiche.id)
-        ),
-      }));
-      setSelectedItems((prev) => ({
-        ...prev,
-        failedFiches: prev.failedFiches.filter((item) => !data.includes(item)),
-      }));
-      toast.success("Suppression réussie", {
-        description: message,
+    try {
+      const response = await fetch(`/api/failedFiches?id=${id}`, {
+        method: "DELETE",
       });
-    } else {
-      toast.error("Échec de la suppression", {
-        description: message,
-      });
+
+      const { success, message, data } = await response.json();
+
+      if (success) {
+        setUpload((prev) => ({
+          ...prev,
+          failedFiches: prev.failedFiches.filter(
+            (fiche) => !data.includes(fiche.id)
+          ),
+        }));
+        setSelectedItems((prev) => ({
+          ...prev,
+          failedFiches: prev.failedFiches.filter(
+            (item) => !data.includes(item)
+          ),
+        }));
+        toast.success(message);
+      } else {
+        toast.error(message);
+      }
+    } catch {
+      toast.error("Une erreur s'est produite.");
     }
   };
 
@@ -347,47 +333,50 @@ const ConsultUpload = ({ params }) => {
   };
 
   const applyChanges = async () => {
-    const fichesToBeUpdate = upload.fiches
-      .filter((fiche) => fiche.status !== fiche.newStatus && fiche.newStatus)
-      .map((fiche) => ({ id: fiche.id, update: { status: fiche.newStatus } }));
+    try {
+      const updaters = upload.fiches
+        .filter((fiche) => fiche.status !== fiche.newStatus && fiche.newStatus)
+        .map((fiche) => ({
+          id: fiche.id,
+          update: { status: fiche.newStatus },
+        }));
 
-    const response = await fetch("/api/fiche", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(fichesToBeUpdate),
-    });
-
-    const { success, message, data } = await response.json();
-
-    if (success) {
-      setUpload((prev) => ({
-        ...prev,
-        fiches: prev.fiches.map((fiche) =>
-          data.includes(fiche.id)
-            ? {
-                ...fiche,
-                status: fiche.newStatus,
-                newStatus: null,
-              }
-            : fiche
-        ),
-      }));
-
-      setSelectedItems((prev) => ({
-        ...prev,
-        fiches: prev.fiches.filter((item) => !data.includes(item)),
-        failedFiches: [],
-      }));
-
-      toast.success("Mettre à jour réussie", {
-        description: message,
+      const response = await fetch("/api/fiches", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updaters),
       });
-    } else {
-      toast.error("Échec de la mise à jour", {
-        description: message,
-      });
+
+      const { success, message, data } = await response.json();
+
+      if (success) {
+        setUpload((prev) => ({
+          ...prev,
+          fiches: prev.fiches.map((fiche) =>
+            data.includes(fiche.id)
+              ? {
+                  ...fiche,
+                  status: fiche.newStatus,
+                  newStatus: null,
+                }
+              : fiche
+          ),
+        }));
+
+        setSelectedItems((prev) => ({
+          ...prev,
+          fiches: prev.fiches.filter((item) => !data.includes(item)),
+          failedFiches: [],
+        }));
+
+        toast.success(message);
+      } else {
+        toast.error(message);
+      }
+    } catch {
+      toast.error("Une erreur s'est produite.");
     }
   };
 

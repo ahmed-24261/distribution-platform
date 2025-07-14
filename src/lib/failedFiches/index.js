@@ -4,42 +4,31 @@ import fs from "fs/promises";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const getFailedFiches = async (ids, userId) => {
-  const clauses = [];
-  const values = [];
-
-  if (ids.length) {
-    values.push(ids);
-    clauses.push(`ff.id = ANY($${values.length})`);
-  }
-  if (userId) {
-    values.push(userId);
-    clauses.push(`up.user_id = $${values.length}`);
-  }
-
-  const whereQuery = clauses.length ? `Where ${clauses.join(" AND ")}` : "";
-
+export const getFailedFicheById = async (id) => {
   const query = `
-      SELECT ff.*
-      FROM failed_fiche ff
-      LEFT JOIN upload up ON ff.upload_id = up.id
-      ${whereQuery}
+      SELECT failed_fiches.*, uploads.user_id
+      FROM failed_fiches
+      LEFT JOIN uploads ON failed_fiches.upload_id = uploads.id
+      WHERE failed_fiches.id = $1
     `;
 
-  const { rows } = await pool.query(query, values);
-  return rows;
+  const { rows, rowCount } = await pool.query(query, [id]);
+
+  if (!rowCount) return null;
+
+  return rows[0];
 };
 
-export const deleteFicheById = async (id) => {
+export const deleteFailedFicheById = async (id) => {
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
     const query = `
-        DELETE FROM fiche 
+        DELETE FROM failed_fiches 
         WHERE id = $1 
-        RETURNING path as "fichePath";
+        RETURNING  file_path;
         `;
     const values = [id];
 
@@ -47,7 +36,7 @@ export const deleteFicheById = async (id) => {
 
     if (!rowCount) return null;
 
-    const { fichePath } = rows[0];
+    const { file_path: fichePath } = rows[0];
 
     const absPath = path.join(FILE_STORAGE_PATH, fichePath);
     const absDirPath = path.dirname(absPath);
@@ -57,10 +46,11 @@ export const deleteFicheById = async (id) => {
 
     await client.query("COMMIT");
     client.release();
+
     return id;
-  } catch {
+  } catch (error) {
     await client.query("ROLLBACK");
     client.release();
-    return null;
+    throw error;
   }
 };

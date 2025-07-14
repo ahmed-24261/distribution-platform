@@ -21,7 +21,7 @@ export const GET = async (request) => {
     const upload = await getUploadById(id);
     if (!upload) {
       return NextResponse.json(
-        { success: false, data: null, message: "Téléversement non trouvé." },
+        { success: false, data: null, message: "Téléversement introuvable" },
         { status: 404 }
       );
     }
@@ -31,13 +31,13 @@ export const GET = async (request) => {
 
       if (
         !canProcessAllUploads &&
-        (canProcessOwnUploads || userId !== ownerId)
+        (!canProcessOwnUploads || userId !== ownerId)
       ) {
         return NextResponse.json(
           {
             success: false,
             data: null,
-            message: "Autorisations insuffisantes.",
+            message: "Autorisations insuffisantes",
           },
           { status: 403 }
         );
@@ -45,26 +45,25 @@ export const GET = async (request) => {
 
       if (status !== "pending") {
         return NextResponse.json(
-          { success: false, data: null, message: "Téléversement déjà traité." },
+          { success: false, data: null, message: "Téléversement déjà traité" },
           { status: 400 }
         );
       }
 
       await redis.rPush("uploadsToBeProcessed", id);
       return NextResponse.json(
-        { success: true, data: id, message: "Téléversement en traitement." },
+        { success: true, data: id, message: "Téléversement en traitement" },
         { status: 200 }
       );
     } else {
       return NextResponse.json(
-        { success: false, data: null, message: "Tâche non prise en charge." },
+        { success: false, data: null, message: "Tâche non prise en charge" },
         { status: 400 }
       );
     }
-  } catch (error) {
-    console.log(error);
+  } catch {
     return NextResponse.json(
-      { success: false, data: null, message: "Erreur interne du serveur." },
+      { success: false, data: null, message: "Erreur interne du serveur" },
       { status: 500 }
     );
   }
