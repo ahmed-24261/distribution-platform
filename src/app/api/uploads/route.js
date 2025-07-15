@@ -96,32 +96,14 @@ export const DELETE = async (request) => {
     const canDeleteAllUploads = permissions.includes("CAN_DELETE_ALL_UPLOADS");
     const canDeleteOwnUploads = permissions.includes("CAN_DELETE_OWN_UPLOADS");
 
-    const upload = await getUploadById(id);
-    if (!upload) {
-      return NextResponse.json(
-        { success: false, data: null, message: "Téléversement non trouvé" },
-        { status: 404 }
-      );
-    }
-
-    const { user_id: ownerId } = upload;
-    if (!canDeleteAllUploads && (canDeleteOwnUploads || userId !== ownerId)) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          message: "Autorisations insuffisantes",
-        },
-        { status: 403 }
-      );
-    }
-
     const where = { uploads: {} };
     if (canDeleteAllUploads) {
       where.uploads.id = id;
     } else if (canDeleteOwnUploads) {
       where.uploads.id = id;
       where.uploads.user_id = userId;
+    } else {
+      where.uploads.id = null;
     }
 
     const uploadId = await deleteUploadWhere(where);
@@ -130,7 +112,7 @@ export const DELETE = async (request) => {
         {
           success: false,
           data: null,
-          message: "Erreur lors de la suppression du téléversement",
+          message: "Autorisation insuffisantes ou téléversement introuvable",
         },
         { status: 500 }
       );

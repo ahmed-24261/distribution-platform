@@ -19,9 +19,8 @@ const Observations = () => {
       <div className="space-y-1">
         {observations.map((obs) => {
           const id = obs?.id;
-          const path = obs?.path;
-          const hash = obs?.hash;
-          const displayName = obs?.object;
+          const name = obs?.object;
+          const extension = ".pdf";
 
           return (
             <Tooltip key={id}>
@@ -33,9 +32,9 @@ const Observations = () => {
                   onClick={() =>
                     handleDocumentClick({
                       id,
-                      path,
-                      hash,
-                      displayName,
+                      name,
+                      extension,
+                      table: "fiches",
                       type: "observation",
                     })
                   }
@@ -44,12 +43,12 @@ const Observations = () => {
                     size={14}
                     className="flex-none mr-2 text-gray-600"
                   />
-                  <span className="line-clamp-1">{displayName}</span>
+                  <span className="line-clamp-1">{name}</span>
                 </div>
               </TooltipTrigger>
 
               <TooltipContent>
-                <p>{displayName}</p>
+                <p>{name}</p>
               </TooltipContent>
             </Tooltip>
           );

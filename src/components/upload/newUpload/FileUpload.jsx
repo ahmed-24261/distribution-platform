@@ -40,27 +40,27 @@ const FileUpload = () => {
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    try {
+      if (!file) return;
 
-    const formData = new FormData();
-    formData.append("type", "file");
-    formData.append("file", file);
+      const formData = new FormData();
+      formData.append("type", "file");
+      formData.append("file", file);
 
-    const response = await fetch("/api/uploads", {
-      method: "POST",
-      body: formData,
-    });
-    const { success, message } = await response.json();
-
-    if (success) {
-      toast.success("Fichier téléversé", {
-        description: message,
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
       });
-      router.push("/upload");
-    } else {
-      toast.error("Échec du téléversement", {
-        description: message,
-      });
+      const { success, message } = await response.json();
+
+      if (success) {
+        toast.success(message);
+        router.push("/upload");
+      } else {
+        toast.error(message);
+      }
+    } catch {
+      toast.error("Une erreur s'est produite.");
     }
   };
 

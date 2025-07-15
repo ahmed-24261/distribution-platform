@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useState, useEffect } from "react";
+import path from "path";
 
 const FicheContext = createContext(null);
 
@@ -12,7 +13,20 @@ export const FicheProvider = ({ children, fiche }) => {
   const namedEntities = [];
 
   useEffect(() => {
-    handleDocumentClick(sourceDocuments[0] || observations[0] || null);
+    let document = null;
+    if (sourceDocuments.length) {
+      const sourceDoc = sourceDocuments[0];
+      const id = sourceDoc?.id;
+      const { ext: extension, name } = path.parse(sourceDoc?.fileName);
+      document = { id, name, extension, table: "documents", type: "source" };
+    } else if (observations.length) {
+      const obs = observations[0];
+      const id = obs?.id;
+      const name = obs?.object;
+      const extension = ".pdf";
+      document = { id, name, extension, table: "fiches", type: "observation" };
+    }
+    handleDocumentClick(document);
   }, []);
 
   const handleDocumentClick = (document) => {
@@ -25,8 +39,33 @@ export const FicheProvider = ({ children, fiche }) => {
       if (!prev) {
         setSelectedDoc(document);
       } else {
-        if (document.docType === "fiche") {
-          setSelectedDoc(sourceDocuments[0] || observations[0] || null);
+        if (document.type === "fiche") {
+          let document = null;
+          if (sourceDocuments.length) {
+            const sourceDoc = sourceDocuments[0];
+            const id = sourceDoc?.id;
+            const { ext: extension, name } = path.parse(sourceDoc?.fileName);
+            document = {
+              id,
+              name,
+              extension,
+              table: "documents",
+              type: "source",
+            };
+          } else if (observations.length) {
+            const obs = observations[0];
+            const id = obs?.id;
+            const name = obs?.object;
+            const extension = ".pdf";
+            document = {
+              id,
+              name,
+              extension,
+              table: "fiches",
+              type: "observation",
+            };
+          }
+          setSelectedDoc(document);
         } else {
           setSelectedDoc(document);
         }
@@ -40,28 +79,93 @@ export const FicheProvider = ({ children, fiche }) => {
     if (type === "source") {
       const index = sourceDocuments.findIndex((doc) => doc.id === document.id);
       if (index > 0) {
-        setSelectedDoc(sourceDocuments[index - 1]);
-      } else if (index === 0 && entireMode) setSelectedDoc(fiche);
+        const sourceDoc = sourceDocuments[index - 1];
+        const id = sourceDoc?.id;
+        const { ext: extension, name } = path.parse(sourceDoc?.fileName);
+        const doc = {
+          id,
+          name,
+          extension,
+          table: "documents",
+          type: "source",
+        };
+        setSelectedDoc(doc);
+      } else if (index === 0 && entireMode) {
+        const id = fiche?.id;
+        const name = fiche?.object;
+        const extension = ".pdf";
+        const doc = {
+          id,
+          name,
+          extension,
+          table: "fiches",
+          type: "fiche",
+        };
+        setSelectedDoc(doc);
+      }
     } else if (type === "observation") {
       const index = observations.findIndex((obs) => obs.id === document.id);
       if (index > 0) {
-        setSelectedDoc(observations[index - 1]);
+        const obs = observations[index - 1];
+        const id = obs?.id;
+        const name = obs?.object;
+        const extension = ".pdf";
+        const doc = {
+          id,
+          name,
+          extension,
+          table: "fiches",
+          type: "observation",
+        };
+        setSelectedDoc(doc);
       }
     }
   };
 
   const navigateNext = (document) => {
     const type = document?.type;
-    if (type === "fiche" && entireMode) setSelectedDoc(sourceDocuments[0]);
-    else if (type === "source") {
+    if (type === "fiche" && entireMode) {
+      const sourceDoc = sourceDocuments[0];
+      const id = sourceDoc?.id;
+      const { ext: extension, name } = path.parse(sourceDoc?.fileName);
+      const doc = {
+        id,
+        name,
+        extension,
+        table: "documents",
+        type: "source",
+      };
+      setSelectedDoc(doc);
+    } else if (type === "source") {
       const index = sourceDocuments.findIndex((doc) => doc.id === document.id);
       if (index < sourceDocuments.length - 1) {
-        setSelectedDoc(sourceDocuments[index + 1]);
+        const sourceDoc = sourceDocuments[index + 1];
+        const id = sourceDoc?.id;
+        const { ext: extension, name } = path.parse(sourceDoc?.fileName);
+        const doc = {
+          id,
+          name,
+          extension,
+          table: "documents",
+          type: "source",
+        };
+        setSelectedDoc(doc);
       }
     } else if (type === "observation") {
       const index = observations.findIndex((obs) => obs.id === document.id);
       if (index < observations.length - 1) {
-        setSelectedDoc(observations[index + 1]);
+        const obs = observations[index + 1];
+        const id = obs?.id;
+        const name = obs?.object;
+        const extension = ".pdf";
+        const doc = {
+          id,
+          name,
+          extension,
+          table: "fiches",
+          type: "observation",
+        };
+        setSelectedDoc(doc);
       }
     }
   };

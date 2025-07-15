@@ -2,13 +2,11 @@ import PDFViewer from "./PDFViewer";
 //import DOCXViewer from "./DOCXViewer";
 import ExtensionNotSupportedViewer from "./ExtensionNotSupportedViewer";
 
-import * as pathLib from "path";
-
-const RenderViewer = ({ path }) => {
-  const extension = pathLib.extname(path);
+const RenderViewer = ({ document }) => {
+  const extension = document.extension;
   switch (extension) {
     case ".pdf":
-      return <PDFViewer path={path} />;
+      return <PDFViewer document={document} />;
     // return <DOCXViewer path={path} />;
     case ".xlsx":
       break;

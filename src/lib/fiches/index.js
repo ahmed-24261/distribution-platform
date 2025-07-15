@@ -117,6 +117,7 @@ export const getFicheWhere = async (where) => {
         fiches.file_path,
         fiches.dump,
         fiches.status,
+        sources.name AS source,
         (
           SELECT COALESCE(
             JSON_AGG(

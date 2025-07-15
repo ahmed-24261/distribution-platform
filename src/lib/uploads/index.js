@@ -177,7 +177,12 @@ export const deleteUploadWhere = async (where) => {
       WITH deleted_upload AS 
         (
           DELETE FROM uploads
+          WHERE id IN
+          (
+          SELECT uploads.id
+          FROM uploads
           ${whereClause}
+          )
           RETURNING *
         )
       SELECT

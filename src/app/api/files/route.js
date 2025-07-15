@@ -7,6 +7,7 @@ import { getFailedFicheById } from "@/lib/failedFiches";
 import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
+import { generateFiche } from ".";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
@@ -199,6 +200,44 @@ export async function GET(request) {
 
           buffers.push(fileBuffer);
           fileNames.push(fileName);
+        } else if (table === "documents") {
+          if (!canGetFiches) {
+            return NextResponse.json(
+              {
+                success: false,
+                data: null,
+                message: "Autorisation insuffisante",
+              },
+              { status: 403 }
+            );
+          }
+
+          const where = { documents: {}, fiches: {}, users: {} };
+
+          where.documents.id = id;
+          if (role === "user") {
+            where.fiches.status = "valid";
+            where.users.id = userId;
+          }
+
+          const document = await getDocumentWhere(where);
+          if (!document) {
+            return NextResponse.json(
+              {
+                success: false,
+                data: null,
+                message: "Document introuvable",
+              },
+              { status: 404 }
+            );
+          }
+
+          const filePath = path.join(FILE_STORAGE_PATH, document.file_path);
+          const fileName = document.file_name;
+          const fileContent = await fs.readFile(filePath);
+
+          buffers.push(fileContent);
+          fileNames.push(fileName);
         } else {
           errors.push({
             message: `Table ${table} non supportée`,
@@ -289,14 +328,14 @@ export async function GET(request) {
           );
         }
 
-        const filePath = path.join(FILE_STORAGE_PATH, fiche.file_path);
-        const fileContent = await fs.readFile(filePath);
+        const { date, source, object, summary, file_path } = fiche;
+        const fileContent = await generateFiche(date, source, object, summary);
+        const fileName = `${path.parse(file_path).name}.pdf`;
+
         return new NextResponse(fileContent, {
           headers: {
             "Content-Type": "application/pdf",
-            "Content-Disposition": `inline; filename="${path.basename(
-              filePath
-            )}"`,
+            "Content-Disposition": `inline; filename="${fileName}"`,
           },
         });
       } else if (table === "documents") {

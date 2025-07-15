@@ -17,9 +17,7 @@ const SourceDocuments = () => {
       <div className="space-y-1">
         {sourceDocuments.map((doc) => {
           const id = doc?.id;
-          const filePath = doc?.path;
-          const hash = doc?.hash;
-          const displayName = path.parse(doc?.fileName)?.name;
+          const { ext: extension, name } = path.parse(doc?.fileName);
 
           return (
             <Tooltip key={id}>
@@ -31,9 +29,9 @@ const SourceDocuments = () => {
                   onClick={() =>
                     handleDocumentClick({
                       id,
-                      path: filePath,
-                      hash,
-                      displayName,
+                      name,
+                      extension,
+                      table: "documents",
                       type: "source",
                     })
                   }
@@ -42,12 +40,12 @@ const SourceDocuments = () => {
                     size={14}
                     className="flex-none mr-2 text-gray-600"
                   />
-                  <span className="line-clamp-1">{displayName}</span>
+                  <span className="line-clamp-1">{name}</span>
                 </div>
               </TooltipTrigger>
 
               <TooltipContent>
-                <p>{displayName}</p>
+                <p>{name}</p>
               </TooltipContent>
             </Tooltip>
           );

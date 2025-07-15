@@ -18,7 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import {
+  DndContext,
+  closestCenter,
+  useSensor,
+  useSensors,
+  PointerSensor,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const DownloadAction = ({ withDownloadForFicheOnly }) => {
   const { sourceDocuments } = useFiche();
@@ -63,7 +76,6 @@ const DownloadAction = ({ withDownloadForFicheOnly }) => {
 
   const handleDownload = () => {
     // to api
-    console.log(selectedDocs);
     setDownloadOpen(false);
   };
 
@@ -80,11 +92,7 @@ const DownloadAction = ({ withDownloadForFicheOnly }) => {
       </Button>
 
       <Dialog open={downloadOpen} onOpenChange={setDownloadOpen}>
-        <DialogContent
-          ref={parentRef}
-          className="w-[450px]"
-          aria-describedby="download-dialog-description"
-        >
+        <DialogContent ref={parentRef} className="w-[450px]">
           <DialogHeader>
             <DialogTitle>Télécharger le document</DialogTitle>
           </DialogHeader>
@@ -198,45 +206,12 @@ const DownloadAction = ({ withDownloadForFicheOnly }) => {
                   </Button>
                 </h4>
                 <div className="max-h-[200px] overflow-y-auto">
-                  <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable
-                      droppableId="source-documents"
-                      className="relative"
-                    >
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className="overflow-y-auto space-y-2"
-                        >
-                          {selectedDocs.map((docId, index) => {
-                            const document = sourceDocuments.find(
-                              (d) => d.id === docId
-                            );
-                            return (
-                              <DraggableDocumentItem
-                                document={document}
-                                index={index}
-                                toggleDocSelection={toggleDocSelection}
-                                parentRef={parentRef}
-                              />
-                            );
-                          })}
-
-                          {sourceDocuments.map((document) => {
-                            if (selectedDocs.includes(document.id)) return;
-                            return (
-                              <UndraggableDocumentItem
-                                document={document}
-                                toggleDocSelection={toggleDocSelection}
-                              />
-                            );
-                          })}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
+                  <DragDropDocs
+                    selectedDocs={selectedDocs}
+                    sourceDocuments={sourceDocuments}
+                    setSelectedDocs={setSelectedDocs}
+                    toggleDocSelection={toggleDocSelection}
+                  />
                 </div>
               </div>
             )}
@@ -260,71 +235,118 @@ const DownloadAction = ({ withDownloadForFicheOnly }) => {
 
 export default DownloadAction;
 
-const DraggableDocumentItem = ({
-  document,
-  index,
+const DragDropDocs = ({
+  selectedDocs,
+  sourceDocuments,
+  setSelectedDocs,
   toggleDocSelection,
-  parentRef,
 }) => {
-  const rect = parentRef.current?.getBoundingClientRect();
-  if (!document) return;
+  const sensors = useSensors(useSensor(PointerSensor));
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = selectedDocs.indexOf(active.id);
+      const newIndex = selectedDocs.indexOf(over.id);
+
+      setSelectedDocs((items) => arrayMove(items, oldIndex, newIndex));
+    }
+  };
 
   return (
-    <Draggable key={document.id} draggableId={document.id} index={index}>
-      {(provided, snapshot) => {
-        const style = provided.draggableProps.style;
-        const draggableProps = provided.draggableProps;
-        draggableProps.style = {
-          ...style,
-          top: style.top - rect?.top,
-          left: style.left - rect?.left,
-        };
-        return (
-          <div
-            ref={provided.innerRef}
-            {...draggableProps}
-            className={`flex items-center justify-between border-b pb-1 mb-2 ${
-              snapshot.isDragging ? "opacity-70 bg-accent rounded-md px-1" : ""
-            }`}
-          >
-            <div className="flex items-center space-x-2 py-2">
-              <Checkbox
-                id={`doc-${document.id}`}
-                checked={true}
-                onCheckedChange={() => toggleDocSelection(document.id)}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext
+        items={selectedDocs}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="overflow-y-auto space-y-2">
+          {selectedDocs.map((docId) => {
+            const document = sourceDocuments.find((d) => d.id === docId);
+            if (!document) return null;
+
+            return (
+              <DraggableDocumentItem
+                key={document.id}
+                id={document.id}
+                document={document}
+                toggleDocSelection={toggleDocSelection}
               />
-              <label
-                htmlFor={`doc-${document.id}`}
-                className="text-sm leading-none"
-              >
-                {document.name}
-              </label>
-            </div>
-            <div
-              {...provided.dragHandleProps}
-              className="cursor-grab hover:text-primary p-1"
-            >
-              <GripVertical size={16} />
-            </div>
-          </div>
-        );
-      }}
-    </Draggable>
+            );
+          })}
+
+          {sourceDocuments.map((document) => {
+            if (selectedDocs.includes(document.id)) return null;
+            return (
+              <UndraggableDocumentItem
+                key={document.id}
+                document={document}
+                toggleDocSelection={toggleDocSelection}
+              />
+            );
+          })}
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 };
 
-const UndraggableDocumentItem = ({ document, toggleDocSelection }) => (
-  <div className="flex items-center justify-between border-b pb-1 mb-2">
-    <div className="flex items-center space-x-2 py-2">
+const DraggableDocumentItem = ({ id, document, toggleDocSelection }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={`flex items-center justify-between border-b pb-1 mb-2 ${
+        isDragging ? "opacity-70 bg-accent rounded-md px-1" : ""
+      }`}
+    >
+      <div className="flex items-center space-x-2 py-2">
+        <Checkbox
+          id={`doc-${document.id}`}
+          checked={true}
+          onCheckedChange={() => toggleDocSelection(document.id)}
+        />
+        <label htmlFor={`doc-${document.id}`} className="text-sm leading-none">
+          {document.fileName}
+        </label>
+      </div>
+      <div {...listeners} className="cursor-grab hover:text-primary p-1">
+        <GripVertical size={16} />
+      </div>
+    </div>
+  );
+};
+
+const UndraggableDocumentItem = ({ document, toggleDocSelection }) => {
+  return (
+    <div className="flex items-center space-x-2 py-2 border-b pb-1 mb-2">
       <Checkbox
-        key={`doc-${document.id}`}
         id={`doc-${document.id}`}
         checked={false}
         onCheckedChange={() => toggleDocSelection(document.id)}
       />
       <label htmlFor={`doc-${document.id}`} className="text-sm leading-none">
-        {document.name}
+        {document.fileName}
       </label>
     </div>
-  </div>
-);
+  );
+};

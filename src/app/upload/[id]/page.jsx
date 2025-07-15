@@ -231,67 +231,71 @@ const ConsultUpload = ({ params }) => {
   };
 
   const handleDeleteBulk = async () => {
-    const successResult = [];
-    const messageResult = [];
-    const dataResult = { fiches: [], failedFiches: [] };
+    try {
+      const ficheIds = selectedItems.fiches;
+      const failedFicheIds = selectedItems.failedFiches;
 
-    if (selectedItems.fiches.length) {
-      const searchParams = [];
+      if (ficheIds.length === 0 && failedFicheIds.length === 0) {
+        toast.error("Aucune fiche sélectionnée pour la suppression");
+        return;
+      }
 
-      selectedItems.fiches.forEach((id) => {
-        searchParams.push(`id=${id}`);
-      });
+      const successes = [];
+      const dataResult = { fiches: [], failedFiches: [] };
+      const messages = [];
 
-      const response = await fetch(`/api/fiche?${searchParams.join("&")}`, {
-        method: "DELETE",
-      });
-      const { success, message, data } = await response.json();
-      successResult.push(success);
-      messageResult.push(message);
-      dataResult.fiches = data;
-    }
+      if (ficheIds.length) {
+        const request = `/api/fiches?${ficheIds
+          .map((id) => `id=${id}`)
+          .join("&")}`;
 
-    if (selectedItems.failedFiches.length) {
-      const searchParams = [];
+        const response = await fetch(request, { method: "DELETE" });
 
-      selectedItems.failedFiches.forEach((id) => {
-        searchParams.push(`id=${id}`);
-      });
+        const { success, message, data } = await response.json();
 
-      const response = await fetch(`/api/fiche?${searchParams.join("&")}`, {
-        method: "DELETE",
-      });
-      const { success, message, data } = await response.json();
-      successResult.push(success);
-      messageResult.push(message);
-      dataResult.failedFiches = data;
-    }
+        dataResult.fiches = data;
+        successes.push(success);
+        messages.push(message);
+      }
 
-    setUpload((prev) => ({
-      ...prev,
-      fiches: prev.fiches.filter(
-        (fiche) => !dataResult.fiches.includes(fiche.id)
-      ),
-      failedFiches: prev.failedFiches.filter(
-        (fiche) => !dataResult.failedFiches.includes(fiche.id)
-      ),
-    }));
+      if (failedFicheIds.length) {
+        const request = `/api/failedFiches?${failedFicheIds
+          .map((id) => `id=${id}`)
+          .join("&")}`;
 
-    setSelectedItems((prev) => ({
-      fiches: prev.fiches.filter((item) => !dataResult.fiches.includes(item)),
-      failedFiches: prev.failedFiches.filter(
-        (item) => !dataResult.failedFiches.includes(item)
-      ),
-    }));
+        const response = await fetch(request, { method: "DELETE" });
 
-    if (successResult.every(Boolean)) {
-      toast.success("Suppression réussie", {
-        description: messageResult.join("\n"),
-      });
-    } else {
-      toast.error("Échec de la suppression", {
-        description: messageResult.join("\n"),
-      });
+        const { success, message, data } = await response.json();
+
+        dataResult.failedFiches = data;
+        successes.push(success);
+        messages.push(message);
+      }
+
+      setUpload((prev) => ({
+        ...prev,
+        fiches: prev.fiches.filter(
+          (fiche) => !dataResult.fiches.includes(fiche.id)
+        ),
+        failedFiches: prev.failedFiches.filter(
+          (fiche) => !dataResult.failedFiches.includes(fiche.id)
+        ),
+      }));
+
+      setSelectedItems((prev) => ({
+        fiches: prev.fiches.filter((item) => !dataResult.fiches.includes(item)),
+        failedFiches: prev.failedFiches.filter(
+          (item) => !dataResult.failedFiches.includes(item)
+        ),
+      }));
+
+      if (successes.every((s) => s)) {
+        toast.success("Toutes les fiches ont supprimées avec succès");
+      } else {
+        toast.error(messages.join("\n"));
+      }
+    } catch {
+      toast.error("Une erreur s'est produite.");
     }
   };
 

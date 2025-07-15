@@ -5,17 +5,14 @@ import DocumentViewer from "@/components/fiche/display/DocumentViewer";
 const Display = () => {
   const { fiche, selectedDoc, entireMode } = useFiche();
 
-  const fullDisplayFicheName = fiche?.object;
-  const displayFicheName = fullDisplayFicheName?.slice(0, 40);
-  const useToolTip = fullDisplayFicheName !== displayFicheName;
+  const id = fiche?.id;
+  const name = fiche?.object;
 
   const ficheDoc = {
-    id: fiche?.id,
-    path: fiche?.path,
-    hash: fiche?.hash,
-    fullDisplayName: fullDisplayFicheName,
-    displayName: displayFicheName,
-    useToolTip,
+    id,
+    name,
+    extension: ".pdf",
+    table: "fiches",
     type: "fiche",
   };
 

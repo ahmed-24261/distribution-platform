@@ -5,20 +5,18 @@ import { toast } from "sonner";
 const DownloadDocument = ({ document, withDownload }) => {
   if (!withDownload) return;
   const handleDownload = async () => {
-    const request = `/api/download?filePath=${document.path}`;
     try {
+      const request = `/api/files?id=${document.id}&table=${document.table}&download=true`;
       const response = await fetch(request);
       if (!response.ok) {
-        throw new Error();
+        const { message } = await response.json();
+        toast.error(message);
+        return;
       }
-      toast.success("Téléchargement lancé", {
-        description: "Votre document est en cours de téléchargement.",
-      });
+      toast.success("Téléchargement lancé");
       window.location.href = request;
     } catch {
-      toast.error("Erreur lors du téléchargement", {
-        description: "Impossible de récupérer le document. Veuillez réessayer.",
-      });
+      toast.error("Une erreur s'est produite");
     }
   };
   return (

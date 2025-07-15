@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/api";
-import { deleteFailedFicheById } from "@/lib/failedFiches";
+import { deleteFailedFicheWhere } from "@/lib/failedFiches";
 
 export const DELETE = async (request) => {
   try {
@@ -16,7 +16,17 @@ export const DELETE = async (request) => {
     const errors = [];
     for (const id of ids) {
       try {
-        const ficheId = await deleteFailedFicheById(id);
+        const where = { failed_fiches: {}, uploads: {} };
+
+        if (canDeleteAllFiches) {
+          where.failed_fiches.id = id;
+        } else if (canDeleteOwnFiches) {
+          where.failed_fiches.id = id;
+          where.uploads.user_id = userId;
+        } else {
+          where.failed_fiches.id = [];
+        }
+        const ficheId = await deleteFailedFicheWhere(where);
 
         if (!ficheId) {
           errors.push({
@@ -28,7 +38,8 @@ export const DELETE = async (request) => {
         }
 
         deletedFicheIds.push(ficheId);
-      } catch {
+      } catch (e) {
+        console.log(e);
         errors.push({ message: "Erreur interne du serveur", status: 500 });
       }
     }
@@ -71,7 +82,7 @@ export const DELETE = async (request) => {
           message:
             total === 1
               ? "Fiche échouée a été supprimée avec succès"
-              : "Toutes les fiches échouées ont supprimées avec succès",
+              : "Toutes les fiches échouées ont été supprimées avec succès",
         },
         { status: 200 }
       );
@@ -85,7 +96,8 @@ export const DELETE = async (request) => {
         { status: 400 }
       );
     }
-  } catch {
+  } catch (e) {
+    console.log(e);
     return NextResponse.json(
       {
         success: false,

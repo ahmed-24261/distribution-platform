@@ -17,10 +17,7 @@ const DocumentViewer = ({ document, withNavigate = false }) => {
       <Card className="p-0 h-full shadow-sm">
         <CardHeader className="px-4 h-12 bg-accent rounded-t-lg flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-sm font-normal flex items-center">
-            <RenderTitle
-              displayName={document.displayName}
-              type={document.type}
-            />
+            <RenderTitle name={document.name} type={document.type} />
           </CardTitle>
           <DocumentActions
             document={document}
@@ -32,7 +29,7 @@ const DocumentViewer = ({ document, withNavigate = false }) => {
           />
         </CardHeader>
         <CardContent className="p-0 flex-1">
-          <RenderViewer path={document?.path} />
+          <RenderViewer document={document} />
         </CardContent>
       </Card>
     </div>

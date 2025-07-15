@@ -15,7 +15,6 @@ const Fiche = ({ params }) => {
       const response = await fetch(`/api/fiches?id=${id}`);
       const { success, data, message } = await response.json();
       if (success) {
-        console.log(data);
         setFiche(data[0]);
       } else {
         alert("GET api/fiches: " + message);

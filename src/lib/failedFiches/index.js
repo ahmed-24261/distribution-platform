@@ -19,38 +19,56 @@ export const getFailedFicheById = async (id) => {
   return rows[0];
 };
 
-export const deleteFailedFicheById = async (id) => {
+export const deleteFailedFicheWhere = async (where) => {
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
+    const values = [];
+    const clauses = [];
+
+    Object.entries(where).forEach(([table, attributes]) => {
+      Object.entries(attributes).forEach(([attribute, value]) => {
+        values.push(value);
+        if (Array.isArray(value)) {
+          clauses.push(`${table}.${attribute} = ANY($${values.length})`);
+        } else {
+          clauses.push(`${table}.${attribute} = $${values.length}`);
+        }
+      });
+    });
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+
     const query = `
-        DELETE FROM failed_fiches 
-        WHERE id = $1 
-        RETURNING  file_path;
+        DELETE FROM failed_fiches
+        WHERE id IN (
+        SELECT failed_fiches.id FROM failed_fiches
+        JOIN uploads ON uploads.id = failed_fiches.upload_id
+         ${whereClause}
+        ) 
+        RETURNING id, file_path;
         `;
-    const values = [id];
 
     const { rows, rowCount } = await client.query(query, values);
 
     if (!rowCount) return null;
 
-    const { file_path: fichePath } = rows[0];
+    const { id, file_path: fichePath } = rows[0];
 
     const absPath = path.join(FILE_STORAGE_PATH, fichePath);
     const absDirPath = path.dirname(absPath);
-    const absDirDirPath = path.dirname(absDirPath);
-    await fs.rm(absDirPath, { recursive: true });
-    await fs.rmdir(absDirDirPath).catch(() => null);
+    await fs.rm(absPath);
+    await fs.rmdir(absDirPath).catch(() => null);
 
     await client.query("COMMIT");
-    client.release();
 
     return id;
   } catch (error) {
     await client.query("ROLLBACK");
-    client.release();
     throw error;
+  } finally {
+    client.release();
   }
 };
