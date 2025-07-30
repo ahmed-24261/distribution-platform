@@ -1,86 +1,162 @@
 import { Pool } from "pg";
-import crypto from "crypto";
 import dotenv from "dotenv";
-import { consoleLog } from "../consoleLog/index.js";
+import fs from "fs";
+import fsp from "fs/promises";
+import path from "path";
+import PDFDocument from "pdfkit";
+import { DateTime } from "luxon";
+import { createHash } from "crypto";
 
 dotenv.config();
+
+const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-const hashFunction = (password) => {
-  return crypto.createHash("sha256").update(password).digest("hex");
-};
-
 async function seed() {
+  const client = await pool.connect();
+
   try {
-    consoleLog("🌱 Seeding database...", "magenta");
+    console.log("🧹 Clearing old data...");
+    await client.query(`
+      TRUNCATE
+        attachments,
+        exchanges,
+        observations,
+        fiche_themes,
+        fiche_services,
+        source_themes,
+        failed_fiches,
+        processes,
+        uploads,
+        user_permissions,
+        permissions,
+        group_sources,
+        group_members,
+        fiches,
+        users,
+        groups,
+        sources,
+        services,
+        themes,
+        exchangers
+      RESTART IDENTITY CASCADE;
+    `);
 
-    // Reset the database
-    const resetQueries = `TRUNCATE TABLE observations, failed_fiches, groups_sources, documents, fiches, sources, uploads, users_permissions, permissions, users, groups CASCADE;`;
-    await pool.query(resetQueries);
+    console.log("🌱 Seeding...");
 
-    // insert sources
-    const sources = [
-      { name: "books", description: "books source" },
-      { name: "fruits", description: "fruits source" },
-      { name: "locations", description: "locations source" },
-    ];
-    const sourceQueries = `INSERT INTO sources (name, description) VALUES ${sources
-      .map((resource) => `('${resource.name}', '${resource.description}')`)
-      .join(", ")} RETURNING id;`;
+    // === SOURCES ===
+    const sourceNames = ["books", "fruits", "materials", "clothes"];
+    const sourceIds = {};
 
-    const sourceRes = await pool.query(sourceQueries);
-    const sourceIds = sourceRes.rows.map((row) => row.id);
-    if (sourceIds.length !== sources.length) {
-      throw new Error("some sources were not inserted");
+    for (const name of sourceNames) {
+      const res = await client.query(
+        `INSERT INTO sources (name) VALUES ($1) RETURNING id`,
+        [name]
+      );
+      sourceIds[name] = res.rows[0].id;
     }
 
-    const [source1, source2, source3] = sourceIds;
+    // === USERS ===
+    const users = [
+      { username: "superAdmin", role: "superAdmin" },
+      { username: "admin1", role: "admin" },
+      { username: "admin2", role: "admin" },
+      { username: "admin3", role: "admin" },
+      { username: "user1", role: "user" },
+      { username: "user2", role: "user" },
+    ];
 
-    // insert groups
+    const userIds = {};
+
+    for (let i = 0; i < users.length; i++) {
+      const { username, role } = users[i];
+      const res = await client.query(
+        `INSERT INTO users (username, password, role)
+         VALUES ($1, $2, $3) RETURNING id`,
+        [username, createHash("sha256").update(username).digest("hex"), role]
+      );
+      userIds[username] = res.rows[0].id;
+    }
+
+    // === GROUPS ===
     const groups = [
-      { name: "group-books", description: "group for books" },
-      { name: "group-fruits", description: "group for fruits" },
-      { name: "group-all", description: "group for all" },
+      { name: "group1", description: "group for books and fruits" },
+      { name: "group2", description: "group for materials and clothes" },
+      { name: "group3", description: "group for all sources" },
     ];
-    const groupQueries = `INSERT INTO groups (name, description) VALUES ${groups
-      .map((resource) => `('${resource.name}', '${resource.description}')`)
-      .join(", ")} RETURNING id;`;
 
-    const groupRes = await pool.query(groupQueries);
-    const groupIds = groupRes.rows.map((row) => row.id);
-    if (groupIds.length !== groups.length) {
-      throw new Error("some groups were not inserted");
+    const groupIds = {};
+    for (let i = 0; i < groups.length; i++) {
+      const { name, description } = groups[i];
+      const res = await client.query(
+        `INSERT INTO groups (name, description) VALUES ($1, $2) RETURNING id`,
+        [name, description]
+      );
+      groupIds[name] = res.rows[0].id;
     }
 
-    const [group1, group2, group3] = groupIds;
+    // === GROUP MEMBERS ===
+    const groupMembers = [
+      { username: "admin2", groupName: "group3" },
+      { username: "user1", groupName: "group1" },
+      { username: "user2", groupName: "group2" },
+    ];
+    for (let i = 0; i < groupMembers.length; i++) {
+      const { username, groupName } = groupMembers[i];
+      await client.query(
+        `INSERT INTO group_members (user_id, group_id) VALUES ($1, $2)`,
+        [userIds[username], groupIds[groupName]]
+      );
+    }
 
-    // insert group_source
-    const groupSource = [
-      { groupId: group1, sourceId: source1 },
-
-      { groupId: group2, sourceId: source2 },
-
-      { groupId: group3, sourceId: source1 },
-      { groupId: group3, sourceId: source2 },
-      { groupId: group3, sourceId: source3 },
+    // === GROUP SOURCES ===
+    const groupSources = [
+      { groupName: "group1", sourceName: "books" },
+      { groupName: "group1", sourceName: "fruits" },
+      { groupName: "group2", sourceName: "materials" },
+      { groupName: "group2", sourceName: "clothes" },
+      { groupName: "group3", sourceName: "books" },
+      { groupName: "group3", sourceName: "fruits" },
+      { groupName: "group3", sourceName: "materials" },
+      { groupName: "group3", sourceName: "clothes" },
     ];
 
-    const groupSourceQueries = `INSERT INTO groups_sources (group_id, source_id) VALUES ${groupSource
-      .map((gs) => `('${gs.groupId}', '${gs.sourceId}')`)
-      .join(", ")} RETURNING *;`;
+    for (let i = 0; i < groupSources.length; i++) {
+      await client.query(
+        `INSERT INTO group_sources (group_id, source_id) VALUES ($1, $2)`,
+        [
+          groupIds[groupSources[i].groupName],
+          sourceIds[groupSources[i].sourceName],
+        ]
+      );
+    }
 
-    const groupSourceRes = await pool.query(groupSourceQueries);
+    // === SERVICES ===
+    const services = [
+      { name: "service1" },
+      { name: "service2" },
+      { name: "service3" },
+      { name: "service4" },
+      { name: "service5" },
+    ];
 
-    // Insert permissions
+    const serviceIds = {};
+    for (let i = 0; i < services.length; i++) {
+      const res = await client.query(
+        `INSERT INTO services (name) VALUES ($1) RETURNING id`,
+        [services[i].name]
+      );
+      serviceIds[services[i].name] = res.rows[0].id;
+    }
+
+    // === PERMISSIONS ===
     const permissions = [
       { name: "CAN_CREATE_UPLOAD", description: "can create upload" },
-
       { name: "CAN_GET_ALL_UPLOADS", description: "can get all uploads" },
       { name: "CAN_GET_OWN_UPLOADS", description: "can get own uploads" },
-
       {
         name: "CAN_PROCESS_ALL_UPLOADS",
         description: "can process all uploads",
@@ -92,259 +168,224 @@ async function seed() {
 
       { name: "CAN_DELETE_ALL_UPLOADS", description: "can delete all uploads" },
       { name: "CAN_DELETE_OWN_UPLOADS", description: "can delete own uploads" },
-
-      { name: "CAN_GET_FICHES", description: "can get fiches" },
-
-      { name: "CAN_UPDATE_ALL_FICHES", description: "can update all fiches" },
-      { name: "CAN_UPDATE_OWN_FICHES", description: "can update own fiches" },
-
-      { name: "CAN_DELETE_ALL_FICHES", description: "can delete all fiches" },
-      { name: "CAN_DELETE_OWN_FICHES", description: "can delete own fiches" },
-    ];
-    const permissionQueries = `INSERT INTO permissions (name, description) VALUES ${permissions
-      .map((resource) => `('${resource.name}', '${resource.description}')`)
-      .join(", ")} RETURNING id;`;
-
-    const permissionRes = await pool.query(permissionQueries);
-    const permissionIds = permissionRes.rows.map((row) => row.id);
-    if (permissionIds.length !== permissions.length) {
-      throw new Error("some permissions were not inserted");
-    }
-    const [
-      canCreateUpload,
-      canGetAllUploads,
-      canGetOwnUploads,
-      canProcessAllUploads,
-      canProcessOwnUploads,
-      canDeleteAllUploads,
-      canDeleteOwnUploads,
-
-      canGetFiches,
-      canUpdateAllFiches,
-      canUpdateOwnFiches,
-
-      canDeleteAllFiches,
-      canDeleteOwnFiches,
-    ] = permissionIds;
-
-    // Insert admins
-    const admins = [
-      {
-        username: "superAdmin",
-        password: "SuperAdminPass1!",
-        role: "superAdmin",
-      },
-      { username: "admin1", password: "AdminPass1!", role: "admin" },
-      { username: "admin2", password: "AdminPass2!", role: "admin" },
-      { username: "admin3", password: "AdminPass3!", role: "admin" },
-      { username: "admin4", password: "AdminPass4!", role: "admin" },
     ];
 
-    const adminQueries = `INSERT INTO users (username, password, role) VALUES ${admins
-      .map(
-        (resource) =>
-          `('${resource.username}', '${hashFunction(resource.password)}', '${
-            resource.role
-          }')`
-      )
-      .join(", ")} RETURNING id;`;
-
-    const adminRes = await pool.query(adminQueries);
-    const adminIds = adminRes.rows.map((row) => row.id);
-    if (adminIds.length !== admins.length) {
-      throw new Error("some users were not inserted");
+    const permissionIds = {};
+    for (let i = 0; i < permissions.length; i++) {
+      const res = await client.query(
+        `INSERT INTO permissions (name, description) VALUES ($1, $2) RETURNING id`,
+        [permissions[i].name, permissions[i].description]
+      );
+      permissionIds[permissions[i].name] = res.rows[0].id;
     }
 
-    const [superAdmin, admin1, admin2, admin3, admin4] = adminIds;
+    // === USER PERMISSIONS ===
+    const userPermissions = [
+      { username: "admin1", permissionName: "CAN_CREATE_UPLOAD" },
+      { username: "admin1", permissionName: "CAN_GET_ALL_UPLOADS" },
+      { username: "admin1", permissionName: "CAN_PROCESS_ALL_UPLOADS" },
+      { username: "admin1", permissionName: "CAN_DELETE_ALL_UPLOADS" },
 
-    consoleLog("admin 1:\n" + admin1, "green");
-    consoleLog("admin 2:\n" + admin2, "green");
-    consoleLog("admin 3:\n" + admin3, "green");
-    consoleLog("admin 4:\n" + admin4, "green");
+      { username: "admin2", permissionName: "CAN_CREATE_UPLOAD" },
+      { username: "admin2", permissionName: "CAN_GET_ALL_UPLOADS" },
+      { username: "admin2", permissionName: "CAN_PROCESS_ALL_UPLOADS" },
+      { username: "admin2", permissionName: "CAN_DELETE_OWN_UPLOADS" },
 
-    // Insert admins
-    const users = [
-      {
-        username: "user1",
-        password: "UserPass1!",
-        role: "user",
-        groupId: group1,
-      },
-      {
-        username: "user2",
-        password: "UserPass2!",
-        role: "user",
-        groupId: group2,
-      },
-      {
-        username: "user3",
-        password: "UserPass3!",
-        role: "user",
-        groupId: group3,
-      },
-      {
-        username: "user4",
-        password: "UserPass4!",
-        role: "user",
-        groupId: group3,
-      },
-      {
-        username: "user5",
-        password: "UserPass5!",
-        role: "user",
-        groupId: group3,
-      },
+      { username: "admin3", permissionName: "CAN_CREATE_UPLOAD" },
     ];
 
-    const userQueries = `INSERT INTO  users (username, password, role, group_id) VALUES ${users
-      .map(
-        (resource) =>
-          `('${resource.username}', '${hashFunction(resource.password)}', '${
-            resource.role
-          }', '${resource.groupId}')`
-      )
-      .join(", ")} RETURNING id;`;
-
-    const userRes = await pool.query(userQueries);
-    const userIds = userRes.rows.map((row) => row.id);
-    if (userIds.length !== users.length) {
-      throw new Error("some users were not inserted");
+    for (let i = 0; i < userPermissions.length; i++) {
+      const { username, permissionName } = userPermissions[i];
+      await client.query(
+        `INSERT INTO user_permissions (user_id, permission_id) VALUES ($1, $2)`,
+        [userIds[username], permissionIds[permissionName]]
+      );
     }
 
-    const [user1, user2, user3, user4, user5] = userIds;
+    // === UPLOADS ===
+    const uploadFolder = path.join("data", "uploads");
+    const date1 = new Date("2024-03-12");
+    const date2 = new Date("2024-03-13");
+    const date3 = new Date("2025-06-02");
 
-    console.log("-----------------");
-    consoleLog("user 1:\n" + user1, "green");
-    consoleLog("user 2:\n" + user2, "green");
-    consoleLog("user 3:\n" + user3, "green");
-    consoleLog("user 4:\n" + user4, "green");
-    consoleLog("user 5:\n" + user5, "green");
+    const formatDate1 = DateTime.fromJSDate(date1).toFormat("yyyyMMdd");
+    const formatDate2 = DateTime.fromJSDate(date2).toFormat("yyyyMMdd");
+    const formatDate3 = DateTime.fromJSDate(date3).toFormat("yyyyMMdd");
 
-    // Insert users_permissions
-    const userPermission = [
-      { userId: superAdmin, permissionId: canCreateUpload },
-      { userId: superAdmin, permissionId: canGetAllUploads },
-      { userId: superAdmin, permissionId: canGetOwnUploads },
-      { userId: superAdmin, permissionId: canProcessAllUploads },
-      { userId: superAdmin, permissionId: canProcessOwnUploads },
-      { userId: superAdmin, permissionId: canDeleteAllUploads },
-      { userId: superAdmin, permissionId: canDeleteOwnUploads },
-      { userId: superAdmin, permissionId: canDeleteAllFiches },
-      { userId: superAdmin, permissionId: canDeleteOwnFiches },
-      { userId: superAdmin, permissionId: canUpdateAllFiches },
-      { userId: superAdmin, permissionId: canUpdateOwnFiches },
-
-      { userId: admin1, permissionId: canCreateUpload },
-      { userId: admin1, permissionId: canGetAllUploads },
-      { userId: admin1, permissionId: canGetOwnUploads },
-      { userId: admin1, permissionId: canProcessAllUploads },
-      { userId: admin1, permissionId: canProcessOwnUploads },
-      { userId: admin1, permissionId: canDeleteAllUploads },
-      { userId: admin1, permissionId: canGetFiches },
-
-      { userId: admin1, permissionId: canDeleteAllFiches },
-      { userId: admin1, permissionId: canDeleteOwnFiches },
-      { userId: admin1, permissionId: canUpdateAllFiches },
-      { userId: admin1, permissionId: canUpdateOwnFiches },
-
-      { userId: admin2, permissionId: canCreateUpload },
-      { userId: admin2, permissionId: canGetOwnUploads },
-      { userId: admin2, permissionId: canDeleteOwnUploads },
-
-      { userId: admin2, permissionId: canDeleteOwnFiches },
-      { userId: admin2, permissionId: canUpdateOwnFiches },
-
-      { userId: admin3, permissionId: canCreateUpload },
-      { userId: admin3, permissionId: canGetAllUploads },
-      { userId: admin3, permissionId: canGetOwnUploads },
-      { userId: admin3, permissionId: canDeleteOwnUploads },
-      { userId: admin3, permissionId: canProcessOwnUploads },
-
-      { userId: admin4, permissionId: canCreateUpload },
-      { userId: admin4, permissionId: canGetAllUploads },
-
-      { userId: user1, permissionId: canGetFiches },
-      { userId: user2, permissionId: canGetFiches },
-      { userId: user3, permissionId: canGetFiches },
-      { userId: user4, permissionId: canGetFiches },
-      { userId: user5, permissionId: canGetFiches },
-    ];
-
-    const userPermissionQueries = `INSERT INTO users_permissions (user_id, permission_id) VALUES ${userPermission
-      .map((up) => `('${up.userId}', '${up.permissionId}')`)
-      .join(", ")} RETURNING *;`;
-
-    const userPermissionRes = await pool.query(userPermissionQueries);
-
-    // insert uploads
     const uploads = [
       {
-        userId: admin1,
-        displayName: "14décembre2022-Form-1",
-        type: "form",
-        date: new Date("2022-12-14").toISOString(),
-        fileName: "TwoZipFiles.zip",
-        path: "data/uploads/20221214/1 - Form - TwoZipFiles.zip",
-        hash: hashFunction("TwoZipFiles.zip"),
-      },
-      {
-        userId: admin1,
-        displayName: "18mars2022-Form-1",
-        type: "form",
-        date: new Date("2022-03-18").toISOString(),
-        fileName: "fiches.zip",
-        path: "data/uploads/20220318/1 - Form - fiches.zip",
-        hash: hashFunction("fiches.zip"),
-      },
-      {
-        userId: admin2,
-        displayName: "14décembre2022-File-2",
+        user_id: userIds["admin1"],
+        uploaded_at: date1,
         type: "file",
-        date: new Date("2022-12-15").toISOString(),
-        fileName: "dumpOfFiche.zip",
-        path: "data/uploads/20221214/2 - File - dumpOfFiche.zip",
-        hash: hashFunction("dumpOfFiche.zip"),
+        file_name: "18fichesOfFruits.pdf",
+        file_path: path.join(
+          uploadFolder,
+          formatDate1,
+          "1 - 18fichesOfFruits.pdf"
+        ),
+        file_hash: createHash("sha256")
+          .update("18fichesOfFruits.pdf")
+          .digest("hex"),
       },
+
       {
-        userId: admin3,
-        displayName: "14décembre2022-File-3",
+        user_id: userIds["admin2"],
+        uploaded_at: date1,
+        type: "form",
+        file_name: "fichesOfFruitsAndBooks.pdf",
+        file_path: path.join(
+          uploadFolder,
+          formatDate1,
+          "2 - fichesOfFruitsAndBooks.pdf"
+        ),
+        file_hash: createHash("sha256")
+          .update("fichesOfFruitsAndBooks.pdf")
+          .digest("hex"),
+      },
+
+      {
+        user_id: userIds["admin2"],
+        uploaded_at: date2,
         type: "file",
-        date: new Date("2022-12-14").toISOString(),
-        fileName: "secondDump.zip",
-        path: "data/uploads/20221214/3 - File - secondDump.zip",
-        hash: hashFunction("secondDump.zip"),
+        file_name: "Date20240314.pdf",
+        file_path: path.join(uploadFolder, formatDate2, "1 - Date20240314.pdf"),
+        file_hash: createHash("sha256")
+          .update("Date20240314.pdf")
+          .digest("hex"),
       },
+
       {
-        userId: admin4,
-        displayName: "14décembre2022-API-4",
-        type: "api",
-        date: new Date("2022-12-10").toISOString(),
-        fileName: "dumpFromAPI.zip",
-        path: "data/uploads/20221214/4 - API - dumpFromAPI.zip",
-        hash: hashFunction("dumpFromAPI.zip"),
+        user_id: userIds["admin3"],
+        uploaded_at: date1,
+        type: "form",
+        file_name: "byAdmin3.pdf",
+        file_path: path.join(uploadFolder, formatDate3, "3 - byAdmin3.pdf"),
+        file_hash: createHash("sha256").update("byAdmin3.pdf").digest("hex"),
+      },
+
+      {
+        user_id: userIds["admin3"],
+        uploaded_at: date3,
+        type: "file",
+        file_name: "fiches.pdf",
+        file_path: path.join(uploadFolder, formatDate3, "1 - fiches.pdf"),
+        file_hash: createHash("sha256").update("fiches.pdf").digest("hex"),
       },
     ];
 
-    const uploadQueries = `INSERT INTO uploads (user_id, display_name, type, date, file_name, file_path, file_hash) VALUES ${uploads
-      .map(
-        (resource) =>
-          `('${resource.userId}', '${resource.displayName}', '${resource.type}', '${resource.date}', '${resource.fileName}', '${resource.path}', '${resource.hash}')`
-      )
-      .join(", ")} RETURNING id;`;
+    const uploadIds = {};
 
-    // const uploadRes = await pool.query(uploadQueries);
-    // const uploadIds = uploadRes.rows.map((row) => row.id);
-    // if (uploadIds.length !== uploads.length) {
-    //   throw new Error("some uploads were not inserted");
-    // }
-    // const [upload1, upload2, upload3, upload4, upload5] = uploadIds;
+    for (let i = 0; i < uploads.length; i++) {
+      const res = await client.query(
+        `INSERT INTO uploads (user_id, uploaded_at, type, file_name, file_path, file_hash)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [
+          uploads[i].user_id,
+          uploads[i].uploaded_at,
+          uploads[i].type,
+          uploads[i].file_name,
+          uploads[i].file_path,
+          uploads[i].file_hash,
+        ]
+      );
+      uploadIds[uploads[i].file_name] = res.rows[0].id;
+    }
 
-    consoleLog("✅ Seed complete.", "green");
-  } catch (error) {
-    consoleLog("❌ Seed failed: " + error, "red");
+    for (let i = 0; i < uploads.length; i++) {
+      const absFile = path.join(FILE_STORAGE_PATH, uploads[i].file_path);
+      const dir = path.dirname(absFile);
+      await fsp.mkdir(dir, { recursive: true });
+      await fsp.writeFile(absFile, uploads[i].file_hash, "utf-8");
+    }
+
+    // === PROCESSES ===
+    const processes = [
+      {
+        upload_id: uploadIds["18fichesOfFruits.pdf"],
+        user_id: userIds["admin1"],
+        started_at: date2,
+        ended_at: date3,
+        status: "completed",
+        attempt: 1,
+      },
+      {
+        upload_id: uploadIds["fichesOfFruitsAndBooks.pdf"],
+        user_id: userIds["admin1"],
+        started_at: date2,
+        status: "failed",
+        attempt: 1,
+      },
+      {
+        upload_id: uploadIds["fichesOfFruitsAndBooks.pdf"],
+        user_id: userIds["admin1"],
+        started_at: date3,
+        status: "completed",
+        attempt: 2,
+      },
+
+      {
+        upload_id: uploadIds["fiches.pdf"],
+        user_id: userIds["admin3"],
+        started_at: date3,
+        status: "failed",
+        attempt: 1,
+      },
+    ];
+
+    for (let i = 0; i < processes.length; i++) {
+      await client.query(
+        `INSERT INTO processes (upload_id, user_id, started_at, ended_at, status, attempt)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          processes[i].upload_id,
+          processes[i].user_id,
+          processes[i].started_at,
+          processes[i].ended_at,
+          processes[i].status,
+          processes[i].attempt,
+        ]
+      );
+    }
+
+    const createSimplePdf = async (filePath, fileName, uploadedAt) => {
+      // Ensure the directory exists
+      await fsp.mkdir(path.dirname(filePath), { recursive: true });
+
+      return new Promise((resolve, reject) => {
+        const doc = new PDFDocument();
+        const stream = fs.createWriteStream(filePath);
+
+        doc.pipe(stream);
+
+        doc.fontSize(20).text("Upload Summary", { underline: true });
+        doc.moveDown();
+
+        doc.fontSize(14).text(`File Name: ${fileName}`);
+        doc.text(`Uploaded At: ${uploadedAt}`);
+
+        doc.end();
+
+        stream.on("finish", resolve);
+        stream.on("error", reject);
+      });
+    };
+
+    // Assuming uploads is defined and FILE_STORAGE_PATH as well
+    for (let i = 0; i < uploads.length; i++) {
+      const absFile = path.join(FILE_STORAGE_PATH, uploads[i].file_path);
+      await createSimplePdf(
+        absFile,
+        uploads[i].file_name,
+        uploads[i].uploaded_at
+      );
+    }
+
+    console.log("✅ Seeding completed successfully.");
+  } catch (err) {
+    console.error("❌ Error during seeding:", err);
   } finally {
+    await client.release();
     await pool.end();
-    process.exit(0);
   }
 }
 

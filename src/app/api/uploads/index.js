@@ -1,7 +1,6 @@
 import path from "path";
 import { DateTime } from "luxon";
 import { calculateFileHash } from "@/lib/utils";
-import { countUploadsByDisplayName } from "@/lib/uploads";
 
 // --- Post request
 export const validatePostRequest = async (request) => {
@@ -99,31 +98,22 @@ export const constructPostData = async (formData, userId) => {
   let fileBuffer;
 
   const type = formData.get("type");
-
   const date = new Date();
-  const formatDate = DateTime.fromJSDate(date).setLocale("fr");
-  const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
-  const formatDateForPath = formatDate.toFormat("yyyyMMdd");
-
-  const count = await countUploadsByDisplayName(formatDateForName);
-  const rank = count + 1;
-
-  const dirPath = path.join("data", "uploads", formatDateForPath);
-  const displayName = `${formatDateForName}-${type}-${rank}`;
+  const formatDate = DateTime.fromJSDate(date).toFormat("yyyyMMdd");
+  const dirPath = path.join("data", "uploads", formatDate);
 
   data.user_id = userId;
-  data.date = date.toISOString();
-  data.display_name = displayName;
+  data.uploaded_at = date;
   data.type = type;
 
   if (["file", "api"].includes(type)) {
     const file = formData.get("file");
 
-    const fileName = file.name;
-    const filePath = path.join(dirPath, `${rank} - ${type} - ${fileName}`);
-
     fileBuffer = Buffer.from(await file.arrayBuffer());
     const fileHash = calculateFileHash(fileBuffer);
+
+    const fileName = file.name;
+    const filePath = path.join(dirPath, `${fileHash.slice(0, 10)}_${fileName}`);
 
     data.file_name = fileName;
     data.file_path = filePath;

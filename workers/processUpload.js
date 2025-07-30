@@ -41,6 +41,47 @@ const processZipFile = async (filePath, outputDir, fileName, uploadId) => {
   }
 };
 
+// const processZipFile = async (filePath, outputDir, fileName, uploadId) => {
+//   return new Promise((resolve, reject) => {
+//     const zip = new StreamZip({
+//       file: filePath,
+//       storeEntries: true,
+//     });
+
+//     // Handle corrupted archive or file error
+//     zip.on("error", (err) => {
+//       zip.close();
+//       reject(new Error(`Erreur d'archive ZIP: ${err.message}`));
+//     });
+
+//     // When the zip is ready
+//     zip.on("ready", async () => {
+//       try {
+//         // Ensure output directory exists
+//         if (!fs.existsSync(outputDir)) {
+//           fs.mkdirSync(outputDir, { recursive: true });
+//         }
+
+//         zip.extract(null, outputDir, (err, count) => {
+//           zip.close();
+
+//           if (err) {
+//             return reject(new Error(`Échec de l'extraction: ${err.message}`));
+//           }
+
+//           console.log(
+//             `✅ ${count} fichiers extraits pour l'upload ${uploadId}`
+//           );
+//           resolve();
+//         });
+//       } catch (err) {
+//         zip.close();
+//         reject(err);
+//       }
+//     });
+//   });
+// };
+
 const unzipFile = async (filePath, outputDir) => {
   const zip = new StreamZip.async({ file: filePath });
 
@@ -358,7 +399,7 @@ const validateAndConstructData = async (
 
   ficheData.ref = ref;
   ficheData.source_id = source.id;
-  ficheData.date = date.toISOString();
+  ficheData.date = date;
   ficheData.object = object;
   ficheData.summary = summary;
   ficheData.file_hash = hash;
@@ -587,7 +628,7 @@ const createFailedFiche = async (folder, filePaths, uploadId, message) => {
     }
 
     if (date) {
-      data.date = date.toISOString();
+      data.date = date;
     }
     data.upload_id = uploadId;
     data.file_name = fileName;
@@ -617,7 +658,6 @@ const createFailedFiche = async (folder, filePaths, uploadId, message) => {
     await client.query("COMMIT");
     client.release();
   } catch (error) {
-    console.log(error);
     await client.query("ROLLBACK");
     client.release();
   }
@@ -683,51 +723,103 @@ const getSourceByName = async (name) => {
   return rows[0];
 };
 
-const updateUploadStatusById = async (id, status) => {
+const createProcess = async (data) => {
   const query = `
-      UPDATE uploads
-      SET status = $1
-      WHERE id = $2
-      RETURNING *; 
-    `;
-  const values = [status, id];
+    WITH inserted AS (
+      INSERT INTO processes (${Object.keys(data).join(", ")})
+      VALUES (${Object.keys(data)
+        .map((_, i) => `$${i + 1}`)
+        .join(", ")})
+      RETURNING *
+    )
+    SELECT inserted.*, users.username
+    FROM inserted
+    LEFT JOIN users ON inserted.user_id = users.id
+  `;
+
+  const values = Object.values(data);
 
   const { rows, rowCount } = await pool.query(query, values);
 
-  if (rowCount) return null;
+  if (!rowCount) return null;
+
+  return rows[0];
+};
+
+const updateProcessById = async (id, update) => {
+  const values = [];
+  const updateQuery = Object.entries(update)
+    .map(([key, value]) => {
+      values.push(value);
+      return `${key} = $${values.length}`;
+    })
+    .join(", ");
+
+  values.push(id);
+
+  const query = `
+    WITH updated AS (
+      UPDATE processes
+      SET ${updateQuery}
+      WHERE id = $${values.length}
+      RETURNING *
+    )
+    SELECT updated.*, users.username
+    FROM updated
+    LEFT JOIN users ON updated.user_id = users.id
+  `;
+
+  const { rows, rowCount } = await pool.query(query, values);
+
+  if (!rowCount) return null;
 
   return rows[0];
 };
 
 while (true) {
   try {
-    const result = await redis.blPop("uploadsToBeProcessed", 0);
-    const id = result?.element;
+    const result = await redis.blPop("processQueue", 0);
+    const task = JSON.parse(result?.element);
+    const { upload_id, user_id, attempt, taskId } = task;
 
-    const upload = await getUploadById(id);
-    if (!upload || upload.status !== "pending") {
-      continue;
+    const newProcess = {
+      upload_id,
+      user_id,
+      started_at: new Date(),
+      status: "processing",
+      attempt,
+    };
+
+    const process = await createProcess(newProcess);
+    const processId = process.id;
+
+    try {
+      const upload = await getUploadById(upload_id);
+
+      const outputDir = path.join(TEMP_FOLDER, upload_id);
+
+      let { file_path, file_name } = upload;
+      file_path = path.join(FILE_STORAGE_PATH, file_path);
+
+      await processZipFile(file_path, outputDir, file_name, upload_id);
+
+      const process = await updateProcessById(processId, {
+        status: "completed",
+        ended_at: new Date(),
+      });
+      await redis.publish(taskId, JSON.stringify(process));
+    } catch {
+      const process = await updateProcessById(processId, {
+        status: "failed",
+        ended_at: new Date(),
+        remark: "put some remarks here!",
+      });
+      await redis.publish(taskId, JSON.stringify(process));
     }
 
-    await updateUploadStatusById(id, "processing");
+    await fsp.rm(TEMP_FOLDER, { recursive: true, force: true });
 
-    const outputDir = path.join(TEMP_FOLDER, id);
-
-    let { file_path: filePath, file_name: fileName } = upload;
-    filePath = path.join(FILE_STORAGE_PATH, filePath);
-
-    await processZipFile(filePath, outputDir, fileName, id)
-      .then(async () => {
-        await updateUploadStatusById(id, "completed");
-      })
-      .catch(async (e) => {
-        console.log(e);
-        await updateUploadStatusById(id, "failed");
-      });
-
-    await fsp.rm(outputDir, { recursive: true, force: true });
-
-    console.log(`✅ Processing done with ID: ${id}`);
+    console.log(`Processing done with ID: ${upload_id}`);
   } catch (err) {
     console.error("Worker error:", err);
   }

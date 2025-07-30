@@ -1,0 +1,257 @@
+@startuml classDiagramV1
+
+' ENUM TYPES
+enum user_role {
+  user
+  admin
+  superAdmin
+}
+
+enum user_status {
+  active
+  inactive
+}
+
+enum upload_type {
+  form
+  file
+  api
+}
+
+enum process_status {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum fiche_type {
+  PLI
+  FICHE
+}
+
+enum importance_level {
+  URGENT
+  IMPORTANT
+  INFORMATION
+}
+
+enum fiche_status {
+  valid
+  suspended
+  canceled
+}
+
+enum language_enum {
+  ANGLAIS
+  ARABE
+  ESPAGNOL
+  FRANÇAIS
+  ITALIEN
+  SUISSE
+  AUTRE
+}
+
+' ENTITIES
+
+class groups {
+  +id: UUID
+  +name: TEXT
+  +description: TEXT
+}
+
+class users {
+  +id: UUID
+  +username: VARCHAR
+  +password: VARCHAR
+  +role: user_role
+  +status: user_status
+  +created_at: TIMESTAMP
+  +last_login: TIMESTAMP
+  +updated_at: TIMESTAMP
+  +creator_id: UUID
+}
+
+class group_members {
+  +id: UUID
+  +user_id: UUID
+  +group_id: UUID
+  +joined_at: TIMESTAMP
+}
+
+class sources {
+  +id: UUID
+  +name: VARCHAR
+}
+
+class group_sources {
+  +id: UUID
+  +group_id: UUID
+  +source_id: UUID
+}
+
+class permissions {
+  +id: UUID
+  +name: TEXT
+  +description: TEXT
+}
+
+class user_permissions {
+  +id: UUID
+  +user_id: UUID
+  +permission_id: UUID
+}
+
+class uploads {
+  +id: UUID
+  +user_id: UUID
+  +uploaded_at: TIMESTAMP
+  +type: upload_type
+  +file_name: TEXT
+  +file_path: TEXT
+  +file_hash: VARCHAR
+}
+
+class processes {
+  +id: UUID
+  +upload_id: UUID
+  +user_id: UUID
+  +started_at: TIMESTAMP
+  +completed_at: TIMESTAMP
+  +status: process_status
+  +attempt: INTEGER
+}
+
+class failed_fiches {
+  +id: UUID
+  +process_id: UUID
+  +failed_at: TIMESTAMP
+  +file_name: TEXT
+  +file_path: TEXT
+  +file_hash: VARCHAR
+  +message: TEXT
+}
+
+class services {
+  +id: UUID
+  +name: TEXT
+}
+
+class fiches {
+  +id: UUID
+  +ref: TEXT
+  +type: fiche_type
+  +source_id: UUID
+  +submitted_at: TIMESTAMP
+  +object: TEXT
+  +summary: TEXT
+  +writer_name: TEXT
+  +writer_service: TEXT
+  +reviewer_name: TEXT
+  +reviewer_service: TEXT
+  +language: language_enum
+  +importance: importance_level
+  +keywords: TEXT[]
+  +remarks: TEXT
+  +distributed_at: TIMESTAMP
+  +status: fiche_status
+  +process_id: UUID
+}
+
+class observations {
+  +id: UUID
+  +fiche_id: UUID
+  +observation_id: UUID
+  +description: TEXT
+}
+
+class fiche_services {
+  +fiche_id: UUID
+  +service_id: UUID
+}
+
+class themes {
+  +id: UUID
+  +name: TEXT
+}
+
+class fiche_themes {
+  +id: UUID
+  +fiche_id: UUID
+  +theme_id: UUID
+}
+
+class source_themes {
+  +id: UUID
+  +source_id: UUID
+  +theme_id: UUID
+}
+
+class exchanges {
+  +id: UUID
+  +fiche_id: UUID
+  +sender: JSONB
+  +receivers: JSONB
+  +date: TIMESTAMP
+  +subject: TEXT
+  +body: TEXT
+}
+
+class exchangers {
+  +id: UUID
+  +name: TEXT
+}
+
+class attachments {
+  +id: UUID
+  +fiche_id: UUID
+  +file_name: TEXT
+  +file_path: TEXT
+  +file_hash: VARCHAR
+  +content: TEXT
+  +translation: TEXT
+  +language: TEXT
+  +original: JSONB
+}
+
+' RELATIONS
+
+users --> users : creator_id
+
+group_members --> users : user_id
+group_members --> groups : group_id
+
+user_permissions --> users : user_id
+user_permissions --> permissions : permission_id
+
+uploads --> users : user_id
+
+processes --> users : user_id
+processes --> uploads : upload_id
+
+fiches --> sources : source_id
+fiches --> processes : process_id
+
+fiche_services  --> fiches : fiche_id
+fiche_services  --> services : service_id
+
+fiche_themes  --> fiches : fiche_id
+fiche_themes  --> themes : theme_id
+
+source_themes  --> sources : source_id
+source_themes  --> themes : theme_id
+
+observations --> fiches : fiche_id
+observations --> fiches : observation_id
+
+exchanges --> fiches : fiche_id
+
+attachments --> fiches : fiche_id
+
+group_sources --> groups : group_id
+group_sources --> sources : source_id
+
+failed_fiches --> sources : source_id
+failed_fiches --> processes : process_id
+
+@enduml

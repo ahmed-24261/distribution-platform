@@ -1,0 +1,257 @@
+@startuml classDiagram
+
+' ENUM TYPES
+enum user_role {
+  user
+  admin
+  superAdmin
+}
+
+enum user_status {
+  active
+  inactive
+}
+
+enum upload_type {
+  form
+  file
+  api
+}
+
+enum process_status {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum product_status {
+  valid
+  suspended
+  canceled
+}
+
+enum product_type {
+  fiche
+  traduction
+  ...
+}
+
+enum exchange_type {
+  message
+  file
+}
+
+' ENTITIES
+
+class groups {
+  +id: UUID
+  +name: TEXT
+  +description: TEXT
+}
+
+class users {
+  +id: UUID
+  +username: VARCHAR
+  +password: VARCHAR
+  +role: user_role
+  +status: user_status
+  +created_at: TIMESTAMP
+  +last_login: TIMESTAMP
+  +updated_at: TIMESTAMP
+  +creator_id: UUID
+}
+
+class group_members {
+  +id: UUID
+  +user_id: UUID
+  +group_id: UUID
+  +joined_at: TIMESTAMP
+}
+
+class sources {
+  +id: UUID
+  +name: VARCHAR
+}
+
+class group_sources {
+  +id: UUID
+  +group_id: UUID
+  +source_id: UUID
+}
+
+class permissions {
+  +id: UUID
+  +name: TEXT
+  +description: TEXT
+}
+
+class user_permissions {
+  +id: UUID
+  +user_id: UUID
+  +permission_id: UUID
+}
+
+class uploads {
+  +id: UUID
+  +user_id: UUID
+  +uploaded_at: TIMESTAMP
+  +type: upload_type
+  +file_name: TEXT
+  +file_path: TEXT
+  +file_hash: VARCHAR
+}
+
+class processes {
+  +id: UUID
+  +upload_id: UUID
+  +user_id: UUID
+  +started_at: TIMESTAMP
+  +completed_at: TIMESTAMP
+  +status: process_status
+}
+
+class products {
+  +id: UUID
+  +ref: TEXT
+  +process_id: UUID
+  +distributed_at: TIMESTAMP
+  +type: product_type
+  +status: product_status
+}
+
+class failed_products {
+  +id: UUID
+  +process_id: UUID
+  +failed_at: TIMESTAMP
+  +file_name: TEXT
+  +file_path: TEXT
+  +file_hash: VARCHAR
+  +message: TEXT
+}
+
+class services {
+  +id: UUID
+  +name: TEXT
+}
+
+class product_services {
+  +product_id: UUID
+  +service_id: UUID
+}
+
+class fiches {
+  +id: UUID
+  +product_id: UUID
+  +source_id: UUID
+  +generation_date: TIMESTAMP
+  +object: TEXT
+  +summary: TEXT
+  +creator_name: TEXT
+  +creator_service: TEXT
+}
+
+class targets {
+  +id: UUID
+  +name: TEXT
+}
+
+class fiche_targets {
+  +id: UUID
+  +fiche_id: UUID
+  +target_id: UUID
+}
+
+class source_targets {
+  +id: UUID
+  +source_id: UUID
+  +target_id: UUID
+}
+
+class observations {
+  +id: UUID
+  +fiche_id: UUID
+  +observation_id: UUID
+}
+
+class exchanges {
+  +id: UUID
+  +product_id: UUID
+  +sender_id: UUID
+  +content: TEXT
+  +date: TIMESTAMP
+  +type: exchange_type
+}
+
+class exchangers {
+  +id: UUID
+  +name: TEXT
+}
+
+class exchange_receivers {
+  +id: UUID
+  +exchange_id: UUID
+  +receiver_id: UUID
+}
+
+class attachments {
+  +id: UUID
+  +product_id: UUID
+  +exchange_id: UUID
+  +file_name: TEXT
+  +file_path: TEXT
+  +file_hash: VARCHAR
+  +content: TEXT
+  +original: JSONB
+}
+
+' RELATIONS
+
+users --> users : creator_id
+
+group_members --> users : user_id
+group_members --> groups : group_id
+
+user_permissions --> users : user_id
+user_permissions --> permissions : permission_id
+
+uploads --> users : user_id
+processes --> users : user_id
+
+processes --> uploads : upload_id
+products --> processes : process_id
+
+product_services  --> products : product_id
+product_services  --> services : service_id
+
+fiches --> products : product_id
+fiches --> sources : source_id
+fiches --> users : creator_id
+
+observations --> fiches : fiche_id
+observations --> fiches : observation_id
+
+fiche_targets --> fiches : fiche_id
+fiche_targets --> targets : target_id
+
+source_targets --> sources : source_id
+source_targets --> targets : target_id
+
+exchanges --> products : product_id
+exchanges --> exchangers : sender_id
+
+exchange_receivers --> exchangers : receiver_id
+exchange_receivers --> exchanges : exchange_id
+
+attachments --> products : product_id
+attachments --> exchanges : exchange_id
+
+group_sources --> groups : group_id
+group_sources --> sources : source_id
+
+failed_products --> sources : source_id
+failed_products --> users : creator_id
+failed_products --> uploads : upload_id
+
+
+@enduml

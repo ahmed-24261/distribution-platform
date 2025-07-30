@@ -388,17 +388,6 @@ export async function GET(request) {
       }
     }
 
-    if (false) {
-      return new NextResponse(fileContent, {
-        headers: {
-          "Content-Type": "application/zip",
-          "Content-Disposition": `inline; filename="${path.basename(
-            fullPath
-          )}"`,
-        },
-      });
-    }
-
     return NextResponse.json(
       { success: true, data: "Done", message: null },
       { status: 200 }

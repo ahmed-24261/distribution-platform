@@ -1,4 +1,8 @@
+import path from "path";
+
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+
+const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
 export const generateFiche = async (date, source, object, summary) => {
   const pdfDoc = await PDFDocument.create();
@@ -149,3 +153,57 @@ export const generateFiche = async (date, source, object, summary) => {
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
 };
+
+export const getUploadBuffer = async (id, user) => {
+  const { data, error } = getUploadById(id, user);
+
+  if (error) return error;
+
+  const { file_path: filePath, file_name: fileName } = data;
+
+  const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+  const fileBuffer = fs.readFileSync(absFilePath);
+
+  return { fileBuffer, fileName };
+};
+
+export const getFicheBuffer = async (id, user) => {
+  const { data, error } = getFicheById(id, user);
+
+  if (error) return error;
+
+  const { file_path: filePath, file_name: fileName } = data;
+
+  const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+  const fileBuffer = fs.readFileSync(absFilePath);
+
+  return { fileBuffer, fileName };
+};
+
+export const getDocumentBuffer = async (id, user) => {
+  const { data, error } = getDocumentById(id, user);
+
+  if (error) return error;
+
+  const { file_path: filePath, file_name: fileName } = data;
+
+  const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+  const fileBuffer = fs.readFileSync(absFilePath);
+
+  return { fileBuffer, fileName };
+};
+
+export const getFailedFicheBuffer = async (id, user) => {
+  const { data, error } = getFailedFicheById(id, user);
+
+  if (error) return error;
+
+  const { file_path: filePath, file_name: fileName } = data;
+
+  const absFilePath = path.join(FILE_STORAGE_PATH, filePath);
+  const fileBuffer = fs.readFileSync(absFilePath);
+
+  return { fileBuffer, fileName };
+};
+
+export const getReportBuffer = async (id, user, options) => {};

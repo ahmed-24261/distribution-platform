@@ -1,0 +1,256 @@
+@startuml classDiagram
+
+' TYPES ÉNUMÉRÉS
+enum rôle_utilisateur {
+  utilisateur
+  administrateur
+  super_administrateur
+}
+
+enum statut_utilisateur {
+  actif
+  inactif
+}
+
+enum type_importation {
+  formulaire
+  fichier
+  api
+}
+
+enum statut_traitement {
+  en_attente
+  en_cours
+  terminé
+  échoué
+}
+
+enum statut_produit {
+  valide
+  suspendu
+  annulé
+}
+
+enum type_produit {
+  fiche
+  traduction
+  ...
+}
+
+enum type_échange {
+  message
+  fichier
+}
+
+' ENTITÉS
+
+class groupes {
+  +id: UUID
+  +nom: TEXT
+  +description: TEXT
+}
+
+class utilisateurs {
+  +id: UUID
+  +nom_utilisateur: VARCHAR
+  +mot_de_passe: VARCHAR
+  +rôle: rôle_utilisateur
+  +statut: statut_utilisateur
+  +créé_le: TIMESTAMP
+  +dernière_connexion: TIMESTAMP
+  +modifié_le: TIMESTAMP
+  +créé_par: UUID
+}
+
+class membres_groupe {
+  +id: UUID
+  +utilisateur_id: UUID
+  +groupe_id: UUID
+  +rejoint_le: TIMESTAMP
+}
+
+class sources {
+  +id: UUID
+  +nom: VARCHAR
+}
+
+class groupes_sources {
+  +id: UUID
+  +groupe_id: UUID
+  +source_id: UUID
+}
+
+class permissions {
+  +id: UUID
+  +nom: TEXT
+  +description: TEXT
+}
+
+class permissions_utilisateur {
+  +id: UUID
+  +utilisateur_id: UUID
+  +permission_id: UUID
+}
+
+class importations {
+  +id: UUID
+  +utilisateur_id: UUID
+  +importé_le: TIMESTAMP
+  +type: type_importation
+  +nom_fichier: TEXT
+  +chemin_fichier: TEXT
+  +empreinte_fichier: VARCHAR
+}
+
+class traitements {
+  +id: UUID
+  +importation_id: UUID
+  +utilisateur_id: UUID
+  +débuté_le: TIMESTAMP
+  +terminé_le: TIMESTAMP
+  +statut: statut_traitement
+}
+
+class produits {
+  +id: UUID
+  +référence: TEXT
+  +traitement_id: UUID
+  +distribué_le: TIMESTAMP
+  +type: type_produit
+  +statut: statut_produit
+}
+
+class produits_échoués {
+  +id: UUID
+  +traitement_id: UUID
+  +échoué_le: TIMESTAMP
+  +nom_fichier: TEXT
+  +chemin_fichier: TEXT
+  +empreinte_fichier: VARCHAR
+  +message: TEXT
+}
+
+class services {
+  +id: UUID
+  +nom: TEXT
+}
+
+class produits_services {
+  +produit_id: UUID
+  +service_id: UUID
+}
+
+class fiches {
+  +id: UUID
+  +produit_id: UUID
+  +source_id: UUID
+  +date_génération: TIMESTAMP
+  +objet: TEXT
+  +résumé: TEXT
+  +nom_créateur: TEXT
+  +service_créateur: TEXT
+}
+
+class cibles {
+  +id: UUID
+  +nom: TEXT
+}
+
+class fiches_cibles {
+  +id: UUID
+  +fiche_id: UUID
+  +cible_id: UUID
+}
+
+class sources_cibles {
+  +id: UUID
+  +source_id: UUID
+  +cible_id: UUID
+}
+
+class observations {
+  +id: UUID
+  +fiche_id: UUID
+  +observation_id: UUID
+}
+
+class échanges {
+  +id: UUID
+  +produit_id: UUID
+  +expéditeur_id: UUID
+  +contenu: TEXT
+  +date: TIMESTAMP
+  +type: type_échange
+}
+
+class échangeurs {
+  +id: UUID
+  +nom: TEXT
+}
+
+class destinataires_échanges {
+  +id: UUID
+  +échange_id: UUID
+  +destinataire_id: UUID
+}
+
+class pièces_jointes {
+  +id: UUID
+  +produit_id: UUID
+  +échange_id: UUID
+  +nom_fichier: TEXT
+  +chemin_fichier: TEXT
+  +empreinte_fichier: VARCHAR
+  +contenu: TEXT
+  +original: JSONB
+}
+
+' RELATIONS
+
+utilisateurs --> utilisateurs : créé_par
+
+membres_groupe --> utilisateurs : utilisateur_id
+membres_groupe --> groupes : groupe_id
+
+permissions_utilisateur --> utilisateurs : utilisateur_id
+permissions_utilisateur --> permissions : permission_id
+
+importations --> utilisateurs : utilisateur_id
+traitements --> utilisateurs : utilisateur_id
+
+traitements --> importations : importation_id
+produits --> traitements : traitement_id
+
+produits_services --> produits : produit_id
+produits_services --> services : service_id
+
+fiches --> produits : produit_id
+fiches --> sources : source_id
+fiches --> utilisateurs : créé_par
+
+observations --> fiches : fiche_id
+observations --> fiches : observation_id
+
+fiches_cibles --> fiches : fiche_id
+fiches_cibles --> cibles : cible_id
+
+sources_cibles --> sources : source_id
+sources_cibles --> cibles : cible_id
+
+échanges --> produits : produit_id
+échanges --> échangeurs : expéditeur_id
+
+destinataires_échanges --> échangeurs : destinataire_id
+destinataires_échanges --> échanges : échange_id
+
+pièces_jointes --> produits : produit_id
+pièces_jointes --> échanges : échange_id
+
+groupes_sources --> groupes : groupe_id
+groupes_sources --> sources : source_id
+
+produits_échoués --> sources : source_id
+produits_échoués --> utilisateurs : créé_par
+produits_échoués --> importations : importation_id
+
+@enduml

@@ -1,3 +1,11 @@
 {
-  "cSpell.words": ["luxon", "nodebuffer", "shadcn", "turbopack"]
+  "cSpell.words": [
+    "enduml",
+    "luxon",
+    "nodebuffer",
+    "shadcn",
+    "startuml",
+    "turbopack",
+    "VARCHAR"
+  ]
 }
